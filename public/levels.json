@@ -1,0 +1,328 @@
+{
+  "levels": [
+    {
+      "id": 1,
+      "name": "Getting Started",
+      "dimensions": {
+        "rows": 5,
+        "cols": 5
+      },
+      "maxMoves": 15,
+      "availableTileTypes": [
+        0,
+        1,
+        2
+      ],
+      "goals": [
+        {
+          "tileType": 0,
+          "count": 10
+        }
+      ],
+      "starThresholds": [
+        0,
+        3,
+        6
+      ]
+    },
+    {
+      "id": 2,
+      "name": "Easy Match",
+      "dimensions": {
+        "rows": 5,
+        "cols": 5
+      },
+      "maxMoves": 18,
+      "availableTileTypes": [
+        0,
+        1,
+        2,
+        3
+      ],
+      "goals": [
+        {
+          "tileType": 1,
+          "count": 8
+        },
+        {
+          "tileType": 2,
+          "count": 8
+        }
+      ],
+      "starThresholds": [
+        0,
+        4,
+        8
+      ]
+    },
+    {
+      "id": 3,
+      "name": "Growing Board",
+      "dimensions": {
+        "rows": 6,
+        "cols": 6
+      },
+      "maxMoves": 20,
+      "availableTileTypes": [
+        0,
+        1,
+        2,
+        3
+      ],
+      "goals": [
+        {
+          "tileType": 0,
+          "count": 15
+        }
+      ],
+      "starThresholds": [
+        0,
+        5,
+        10
+      ]
+    },
+    {
+      "id": 4,
+      "name": "Triple Trouble",
+      "dimensions": {
+        "rows": 6,
+        "cols": 6
+      },
+      "maxMoves": 22,
+      "availableTileTypes": [
+        0,
+        1,
+        2,
+        3,
+        4
+      ],
+      "goals": [
+        {
+          "tileType": 0,
+          "count": 10
+        },
+        {
+          "tileType": 1,
+          "count": 10
+        },
+        {
+          "tileType": 2,
+          "count": 10
+        }
+      ],
+      "starThresholds": [
+        0,
+        5,
+        10
+      ]
+    },
+    {
+      "id": 5,
+      "name": "Full House",
+      "dimensions": {
+        "rows": 7,
+        "cols": 7
+      },
+      "maxMoves": 25,
+      "availableTileTypes": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "goals": [
+        {
+          "tileType": 3,
+          "count": 15
+        },
+        {
+          "tileType": 4,
+          "count": 15
+        }
+      ],
+      "starThresholds": [
+        0,
+        6,
+        12
+      ]
+    },
+    {
+      "id": 6,
+      "name": "The Challenge",
+      "dimensions": {
+        "rows": 7,
+        "cols": 7
+      },
+      "maxMoves": 22,
+      "availableTileTypes": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "goals": [
+        {
+          "tileType": 0,
+          "count": 20
+        },
+        {
+          "tileType": 5,
+          "count": 20
+        }
+      ],
+      "starThresholds": [
+        0,
+        5,
+        10
+      ]
+    },
+    {
+      "id": 7,
+      "name": "Standard Play",
+      "dimensions": {
+        "rows": 8,
+        "cols": 8
+      },
+      "maxMoves": 30,
+      "availableTileTypes": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "goals": [
+        {
+          "tileType": 1,
+          "count": 25
+        },
+        {
+          "tileType": 2,
+          "count": 25
+        }
+      ],
+      "starThresholds": [
+        0,
+        8,
+        15
+      ]
+    },
+    {
+      "id": 8,
+      "name": "Grand Arena",
+      "dimensions": {
+        "rows": 8,
+        "cols": 8
+      },
+      "maxMoves": 28,
+      "availableTileTypes": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "goals": [
+        {
+          "tileType": 0,
+          "count": 20
+        },
+        {
+          "tileType": 1,
+          "count": 20
+        },
+        {
+          "tileType": 2,
+          "count": 20
+        }
+      ],
+      "starThresholds": [
+        0,
+        7,
+        14
+      ]
+    },
+    {
+      "id": 9,
+      "name": "Expert Mode",
+      "dimensions": {
+        "rows": 8,
+        "cols": 8
+      },
+      "maxMoves": 25,
+      "availableTileTypes": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "goals": [
+        {
+          "tileType": 3,
+          "count": 30
+        },
+        {
+          "tileType": 4,
+          "count": 30
+        },
+        {
+          "tileType": 5,
+          "count": 30
+        }
+      ],
+      "starThresholds": [
+        0,
+        6,
+        12
+      ]
+    },
+    {
+      "id": 10,
+      "name": "Master Level",
+      "dimensions": {
+        "rows": 8,
+        "cols": 8
+      },
+      "maxMoves": 20,
+      "availableTileTypes": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "goals": [
+        {
+          "tileType": 0,
+          "count": 25
+        },
+        {
+          "tileType": 1,
+          "count": 25
+        },
+        {
+          "tileType": 2,
+          "count": 25
+        },
+        {
+          "tileType": 3,
+          "count": 25
+        }
+      ],
+      "starThresholds": [
+        0,
+        5,
+        10
+      ]
+    }
+  ]
+}
