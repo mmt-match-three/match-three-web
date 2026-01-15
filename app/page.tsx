@@ -2,17 +2,14 @@
 
 import { useLevelProgress } from "@/hooks/use-level-progress";
 import { LevelMap } from "@/components/game/level-map";
+import { LoadingScreen } from "@/components/game/loading-screen";
 
 export default function Page() {
     const { levels, progress, isLoading, error, isLevelUnlocked } =
         useLevelProgress();
 
     if (isLoading) {
-        return (
-            <div className="flex min-h-screen items-center justify-center bg-linear-to-b from-slate-900 via-purple-950 to-slate-900">
-                <div className="text-lg text-purple-300">Loading levels...</div>
-            </div>
-        );
+        return <LoadingScreen />;
     }
 
     if (error) {

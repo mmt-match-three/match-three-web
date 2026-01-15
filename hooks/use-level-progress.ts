@@ -1,4 +1,7 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
+import { useQuery, useMutation } from "convex/react";
+import { api } from "@/convex/_generated/api";
+import { useUser } from "@/contexts/user-context";
 import type { Level, LevelProgress, LevelsData } from "@/lib/types";
 
 type UseLevelProgressReturn = {
@@ -8,15 +11,44 @@ type UseLevelProgressReturn = {
     error: string | null;
     isLevelUnlocked: (levelId: number) => boolean;
     getLevelProgress: (levelId: number) => LevelProgress | undefined;
-    completeLevel: (levelId: number, movesUsed: number, maxMoves: number, starThresholds: [number, number, number]) => void;
-    getStarsForMoves: (movesRemaining: number, starThresholds: [number, number, number]) => number;
+    completeLevel: (
+        levelId: number,
+        movesUsed: number,
+        maxMoves: number,
+        starThresholds: [number, number, number]
+    ) => void;
+    getStarsForMoves: (
+        movesRemaining: number,
+        starThresholds: [number, number, number]
+    ) => number;
 };
 
 export function useLevelProgress(): UseLevelProgressReturn {
+    const { userId, isLoading: userLoading } = useUser();
     const [levels, setLevels] = useState<Level[]>([]);
-    const [progress, setProgress] = useState<Record<number, LevelProgress>>({});
-    const [isLoading, setIsLoading] = useState(true);
+    const [levelsLoading, setLevelsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+
+    // Fetch completed levels from Convex
+    const completedLevels = useQuery(
+        api.levels.getCompletedLevels,
+        userId ? { userId } : "skip"
+    );
+
+    // Mutation to save completed level
+    const completeLevelMutation = useMutation(api.levels.completeLevel);
+
+    // Convert Convex data to progress record
+    const progress = useMemo<Record<number, LevelProgress>>(() => {
+        if (!completedLevels) return {};
+        return completedLevels;
+    }, [completedLevels]);
+
+    // Combined loading state - wait for user, levels JSON, and completed levels from Convex
+    const isLoading =
+        userLoading ||
+        levelsLoading ||
+        (userId !== null && completedLevels === undefined);
 
     // Load levels from JSON
     useEffect(() => {
@@ -31,7 +63,7 @@ export function useLevelProgress(): UseLevelProgressReturn {
             } catch (err) {
                 setError(err instanceof Error ? err.message : "Unknown error");
             } finally {
-                setIsLoading(false);
+                setLevelsLoading(false);
             }
         }
 
@@ -61,7 +93,10 @@ export function useLevelProgress(): UseLevelProgressReturn {
 
     // Calculate stars based on moves remaining
     const getStarsForMoves = useCallback(
-        (movesRemaining: number, starThresholds: [number, number, number]): number => {
+        (
+            movesRemaining: number,
+            starThresholds: [number, number, number]
+        ): number => {
             // starThresholds: [1-star, 2-star, 3-star] moves remaining requirements
             if (movesRemaining >= starThresholds[2]) return 3;
             if (movesRemaining >= starThresholds[1]) return 2;
@@ -71,7 +106,7 @@ export function useLevelProgress(): UseLevelProgressReturn {
         []
     );
 
-    // Complete a level
+    // Complete a level - persists to Convex
     const completeLevel = useCallback(
         (
             levelId: number,
@@ -79,35 +114,25 @@ export function useLevelProgress(): UseLevelProgressReturn {
             maxMoves: number,
             starThresholds: [number, number, number]
         ) => {
+            if (!userId) {
+                console.warn("Cannot save level progress: no user ID");
+                return;
+            }
+
             const movesRemaining = maxMoves - movesUsed;
             const stars = getStarsForMoves(movesRemaining, starThresholds);
 
-            setProgress((prev) => {
-                const existingProgress = prev[levelId];
-
-                // Only update if new result is better
-                if (
-                    existingProgress &&
-                    existingProgress.stars >= stars &&
-                    existingProgress.bestMoves <= movesUsed
-                ) {
-                    return prev;
-                }
-
-                return {
-                    ...prev,
-                    [levelId]: {
-                        completed: true,
-                        stars: Math.max(stars, existingProgress?.stars ?? 0),
-                        bestMoves: Math.min(
-                            movesUsed,
-                            existingProgress?.bestMoves ?? Infinity
-                        ),
-                    },
-                };
+            // Save to Convex (the mutation handles checking if update is needed)
+            completeLevelMutation({
+                userId,
+                levelId,
+                stars,
+                movesUsed,
+            }).catch((err) => {
+                console.error("Failed to save level completion:", err);
             });
         },
-        [getStarsForMoves]
+        [userId, getStarsForMoves, completeLevelMutation]
     );
 
     return {

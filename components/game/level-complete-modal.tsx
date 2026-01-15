@@ -7,16 +7,13 @@ type LevelCompleteModalProps = {
     isOpen: boolean;
     isVictory: boolean;
     stars: number;
-    levelId: number;
-    score: number;
     onRetry: () => void;
-    hasNextLevel: boolean;
 };
 
 function StarIcon({ filled }: { filled: boolean }) {
     return (
         <svg
-            className={`w-12 h-12 ${
+            className={`w-14 h-14 ${
                 filled ? "text-yellow-400" : "text-gray-600"
             }`}
             fill={filled ? "currentColor" : "none"}
@@ -37,10 +34,7 @@ export function LevelCompleteModal({
     isOpen,
     isVictory,
     stars,
-    levelId,
-    score,
     onRetry,
-    hasNextLevel,
 }: LevelCompleteModalProps) {
     if (!isOpen) return null;
 
@@ -51,63 +45,44 @@ export function LevelCompleteModal({
 
             {/* Modal */}
             <div className="relative bg-card border-2 border-border rounded-2xl p-8 max-w-md w-full mx-4 shadow-2xl animate-in zoom-in-95 duration-200">
-                {/* Title */}
-                <h2
-                    className={`text-3xl font-bold text-center mb-4 ${
-                        isVictory ? "text-green-400" : "text-red-400"
-                    }`}
-                >
-                    {isVictory ? "Level Complete!" : "Out of Moves!"}
-                </h2>
+                {isVictory ? (
+                    <>
+                        {/* Victory Title */}
+                        <h2 className="text-4xl font-bold text-center text-green-400 mb-6">
+                            Победа!
+                        </h2>
 
-                {/* Stars (only for victory) */}
-                {isVictory && (
-                    <div className="flex justify-center gap-2 mb-6">
-                        <StarIcon filled={stars >= 1} />
-                        <StarIcon filled={stars >= 2} />
-                        <StarIcon filled={stars >= 3} />
-                    </div>
-                )}
+                        {/* Stars */}
+                        <div className="flex justify-center gap-2 mb-8">
+                            <StarIcon filled={stars >= 1} />
+                            <StarIcon filled={stars >= 2} />
+                            <StarIcon filled={stars >= 3} />
+                        </div>
 
-                {/* Score */}
-                <div className="text-center mb-8">
-                    <div className="text-sm text-muted-foreground uppercase tracking-wide">
-                        Score
-                    </div>
-                    <div className="text-4xl font-bold text-primary">
-                        {score}
-                    </div>
-                </div>
-
-                {/* Buttons */}
-                <div className="flex flex-col gap-3">
-                    {isVictory && hasNextLevel && (
+                        {/* Next button - goes to map */}
                         <Link
-                            href={`/level/${levelId + 1}`}
-                            className="w-full py-3 px-6 rounded-lg bg-green-600 hover:bg-green-500 text-white font-semibold text-center transition-colors"
+                            href="/"
+                            className="block w-full py-4 px-6 rounded-xl bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-400 hover:to-emerald-400 text-white font-bold text-lg text-center transition-all hover:scale-105 shadow-lg"
                         >
-                            Next Level
+                            Далее
                         </Link>
-                    )}
+                    </>
+                ) : (
+                    <>
+                        {/* Defeat Title */}
+                        <h2 className="text-3xl font-bold text-center text-red-400 mb-8">
+                            Ходы закончились!
+                        </h2>
 
-                    <button
-                        onClick={onRetry}
-                        className={`w-full py-3 px-6 rounded-lg font-semibold transition-colors ${
-                            isVictory
-                                ? "bg-muted hover:bg-muted/80 text-foreground"
-                                : "bg-primary hover:bg-primary/90 text-primary-foreground"
-                        }`}
-                    >
-                        {isVictory ? "Play Again" : "Try Again"}
-                    </button>
-
-                    <Link
-                        href="/"
-                        className="w-full py-3 px-6 rounded-lg bg-muted hover:bg-muted/80 text-foreground font-semibold text-center transition-colors"
-                    >
-                        Back to Levels
-                    </Link>
-                </div>
+                        {/* Retry button */}
+                        <button
+                            onClick={onRetry}
+                            className="w-full py-4 px-6 rounded-xl bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-400 hover:to-pink-400 text-white font-bold text-lg transition-all hover:scale-105 shadow-lg"
+                        >
+                            Попробовать снова
+                        </button>
+                    </>
+                )}
             </div>
         </div>
     );

@@ -1,8 +1,9 @@
 "use client";
 
 import * as React from "react";
-import Link from "next/link";
-import type { Level, LevelProgress } from "@/lib/types";
+import { useRouter } from "next/navigation";
+import type { Level, LevelProgress, LevelGoal } from "@/lib/types";
+import { getTileSpriteStyle } from "@/lib/game-utils";
 
 type LevelMapProps = {
     levels: Level[];
@@ -10,8 +11,14 @@ type LevelMapProps = {
     isLevelUnlocked: (levelId: number) => boolean;
 };
 
-function StarDisplay({ stars, size = "sm" }: { stars: number; size?: "sm" | "lg" }) {
-    const sizeClass = size === "lg" ? "w-5 h-5" : "w-3 h-3";
+function StarDisplay({
+    stars,
+    size = "sm",
+}: {
+    stars: number;
+    size?: "sm" | "lg";
+}) {
+    const sizeClass = size === "lg" ? "w-6 h-6" : "w-4 h-4";
 
     return (
         <div className="flex gap-0.5">
@@ -55,29 +62,108 @@ function LockIcon() {
     );
 }
 
-export function LevelMap({ levels, progress, isLevelUnlocked }: LevelMapProps) {
+// Level preview modal with goals
+function LevelPreviewModal({
+    level,
+    onPlay,
+    onClose,
+}: {
+    level: Level;
+    onPlay: () => void;
+    onClose: () => void;
+}) {
     return (
-        <div className="min-h-screen bg-gradient-to-b from-slate-900 via-purple-950 to-slate-900 py-8 px-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+            {/* Backdrop */}
+            <div
+                className="absolute inset-0 bg-black/70 backdrop-blur-sm"
+                onClick={onClose}
+            />
+
+            {/* Modal */}
+            <div className="relative bg-card border-2 border-border rounded-2xl p-6 max-w-sm w-full mx-4 shadow-2xl animate-in zoom-in-95 duration-200">
+                {/* Level number */}
+                <h2 className="text-2xl font-bold text-center text-white mb-6">
+                    Уровень {level.id}
+                </h2>
+
+                {/* Goals */}
+                <div className="mb-8">
+                    <div className="text-xs text-purple-300 uppercase tracking-wide mb-4 text-center">
+                        Цель
+                    </div>
+                    <div className="flex justify-center gap-6">
+                        {level.goals.map((goal, index) => (
+                            <GoalPreview key={index} goal={goal} />
+                        ))}
+                    </div>
+                </div>
+
+                {/* Play button */}
+                <button
+                    onClick={onPlay}
+                    className="w-full py-4 px-6 rounded-xl bg-linear-to-r from-purple-500 to-pink-500 hover:from-purple-400 hover:to-pink-400 text-white font-bold text-lg transition-all hover:scale-105 shadow-lg"
+                >
+                    Играть
+                </button>
+            </div>
+        </div>
+    );
+}
+
+function GoalPreview({ goal }: { goal: LevelGoal }) {
+    return (
+        <div className="flex flex-col items-center">
+            <div
+                className="w-14 h-14 rounded-lg"
+                style={getTileSpriteStyle(goal.tileType)}
+            />
+            <div className="text-xl font-bold text-white mt-1">
+                {goal.count}
+            </div>
+        </div>
+    );
+}
+
+export function LevelMap({ levels, progress, isLevelUnlocked }: LevelMapProps) {
+    const router = useRouter();
+    const [selectedLevel, setSelectedLevel] = React.useState<Level | null>(
+        null
+    );
+
+    const handleLevelClick = (level: Level) => {
+        setSelectedLevel(level);
+    };
+
+    const handlePlay = () => {
+        if (selectedLevel) {
+            router.push(`/level/${selectedLevel.id}`);
+        }
+    };
+
+    return (
+        <div className="min-h-screen bg-linear-to-b from-slate-900 via-purple-950 to-slate-900 py-8 px-4">
             <div className="max-w-md mx-auto">
                 {/* Header */}
                 <div className="text-center mb-8">
                     <h1 className="text-4xl font-bold text-white mb-2">
-                        Match Three
+                        Три в ряд
                     </h1>
-                    <p className="text-purple-300">Select a level to play</p>
+                    <p className="text-purple-300">Выберите уровень</p>
                 </div>
 
                 {/* Level Path */}
                 <div className="relative">
                     {/* Connection line */}
-                    <div className="absolute left-1/2 top-0 bottom-0 w-1 bg-gradient-to-b from-purple-600 via-purple-500 to-purple-700 -translate-x-1/2 rounded-full" />
+                    <div className="absolute left-1/2 top-0 bottom-0 w-1 bg-linear-to-b from-purple-600 via-purple-500 to-purple-700 -translate-x-1/2 rounded-full" />
 
                     {/* Levels */}
                     <div className="relative space-y-6">
                         {levels.map((level, index) => {
                             const isUnlocked = isLevelUnlocked(level.id);
                             const levelProgress = progress[level.id];
-                            const isCompleted = levelProgress?.completed ?? false;
+                            const isCompleted =
+                                levelProgress?.completed ?? false;
                             const stars = levelProgress?.stars ?? 0;
 
                             // Alternate sides for visual interest
@@ -90,42 +176,31 @@ export function LevelMap({ levels, progress, isLevelUnlocked }: LevelMapProps) {
                                         isLeft ? "flex-row" : "flex-row-reverse"
                                     }`}
                                 >
-                                    {/* Level info card */}
+                                    {/* Stars display */}
                                     <div
                                         className={`flex-1 ${
                                             isLeft ? "text-right" : "text-left"
                                         }`}
                                     >
-                                        {isUnlocked && (
-                                            <div className="space-y-1">
-                                                <div className="text-sm text-purple-300">
-                                                    {level.dimensions.rows}x
-                                                    {level.dimensions.cols}
-                                                </div>
-                                                <div className="text-white font-medium">
-                                                    {level.name}
-                                                </div>
-                                                {isCompleted && (
-                                                    <div
-                                                        className={`flex ${
-                                                            isLeft
-                                                                ? "justify-end"
-                                                                : "justify-start"
-                                                        }`}
-                                                    >
-                                                        <StarDisplay
-                                                            stars={stars}
-                                                        />
-                                                    </div>
-                                                )}
+                                        {isCompleted && (
+                                            <div
+                                                className={`flex ${
+                                                    isLeft
+                                                        ? "justify-end"
+                                                        : "justify-start"
+                                                }`}
+                                            >
+                                                <StarDisplay stars={stars} />
                                             </div>
                                         )}
                                     </div>
 
                                     {/* Level node */}
                                     {isUnlocked ? (
-                                        <Link
-                                            href={`/level/${level.id}`}
+                                        <button
+                                            onClick={() =>
+                                                handleLevelClick(level)
+                                            }
                                             className={`
                                                 relative z-10 w-16 h-16 rounded-full
                                                 flex items-center justify-center
@@ -134,14 +209,14 @@ export function LevelMap({ levels, progress, isLevelUnlocked }: LevelMapProps) {
                                                 hover:scale-110 hover:shadow-lg
                                                 ${
                                                     isCompleted
-                                                        ? "bg-gradient-to-br from-green-400 to-green-600 text-white shadow-green-500/30"
-                                                        : "bg-gradient-to-br from-purple-400 to-purple-600 text-white shadow-purple-500/30"
+                                                        ? "bg-linear-to-br from-green-400 to-green-600 text-white shadow-green-500/30"
+                                                        : "bg-linear-to-br from-purple-400 to-purple-600 text-white shadow-purple-500/30"
                                                 }
                                                 shadow-lg
                                             `}
                                         >
                                             {level.id}
-                                        </Link>
+                                        </button>
                                     ) : (
                                         <div
                                             className="
@@ -165,9 +240,18 @@ export function LevelMap({ levels, progress, isLevelUnlocked }: LevelMapProps) {
 
                 {/* Footer hint */}
                 <div className="mt-12 text-center text-sm text-purple-400">
-                    Complete levels to unlock more!
+                    Пройдите уровни, чтобы открыть новые!
                 </div>
             </div>
+
+            {/* Level Preview Modal */}
+            {selectedLevel && (
+                <LevelPreviewModal
+                    level={selectedLevel}
+                    onPlay={handlePlay}
+                    onClose={() => setSelectedLevel(null)}
+                />
+            )}
         </div>
     );
 }

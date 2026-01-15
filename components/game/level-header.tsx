@@ -7,13 +7,12 @@ import type { Level } from "@/lib/types";
 type LevelHeaderProps = {
     level: Level;
     movesRemaining: number;
-    score: number;
 };
 
-export function LevelHeader({ level, movesRemaining, score }: LevelHeaderProps) {
+export function LevelHeader({ level, movesRemaining }: LevelHeaderProps) {
     return (
         <div className="mb-4 w-full max-w-[500px]">
-            <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center justify-between">
                 <Link
                     href="/"
                     className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
@@ -31,42 +30,26 @@ export function LevelHeader({ level, movesRemaining, score }: LevelHeaderProps) 
                             d="M15 19l-7-7 7-7"
                         />
                     </svg>
-                    Back
+                    Назад
                 </Link>
-                <span className="text-sm font-medium text-muted-foreground">
-                    Level {level.id}
-                </span>
-            </div>
 
-            <div className="flex items-center justify-between rounded-lg bg-card border border-border p-3">
-                <div className="text-center">
-                    <div className="text-xs text-muted-foreground uppercase tracking-wide">
-                        Moves
-                    </div>
-                    <div
-                        className={`text-2xl font-bold ${
+                <span className="text-lg font-bold text-foreground">
+                    Уровень {level.id}
+                </span>
+
+                <div className="flex items-center gap-2">
+                    <span className="text-xs text-muted-foreground uppercase tracking-wide">
+                        Ходы
+                    </span>
+                    <span
+                        className={`text-xl font-bold ${
                             movesRemaining <= 3
                                 ? "text-destructive"
                                 : "text-foreground"
                         }`}
                     >
                         {movesRemaining}
-                    </div>
-                </div>
-
-                <div className="text-center flex-1">
-                    <div className="text-lg font-semibold text-foreground">
-                        {level.name}
-                    </div>
-                </div>
-
-                <div className="text-center">
-                    <div className="text-xs text-muted-foreground uppercase tracking-wide">
-                        Score
-                    </div>
-                    <div className="text-2xl font-bold text-primary">
-                        {score}
-                    </div>
+                    </span>
                 </div>
             </div>
         </div>

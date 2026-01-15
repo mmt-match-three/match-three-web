@@ -12,7 +12,6 @@ type GameBoardProps = {
     onComplete: (movesUsed: number) => void;
     onFailed: () => void;
     onGoalProgressUpdate: (progress: Record<number, number>) => void;
-    onScoreUpdate: (score: number) => void;
     onMovesUpdate: (movesUsed: number) => void;
 };
 
@@ -21,7 +20,6 @@ export function GameBoard({
     onComplete,
     onFailed,
     onGoalProgressUpdate,
-    onScoreUpdate,
     onMovesUpdate,
 }: GameBoardProps) {
     const containerRef = React.useRef<HTMLDivElement>(null);
@@ -58,11 +56,6 @@ export function GameBoard({
     React.useEffect(() => {
         onGoalProgressUpdate(goalProgress);
     }, [goalProgress, onGoalProgressUpdate]);
-
-    // Notify parent of score changes
-    React.useEffect(() => {
-        onScoreUpdate(score);
-    }, [score, onScoreUpdate]);
 
     // Notify parent of moves changes
     React.useEffect(() => {

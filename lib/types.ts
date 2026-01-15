@@ -37,7 +37,6 @@ export type LevelGoal = {
 // Level configuration
 export type Level = {
     id: number;
-    name: string;
     dimensions: { rows: number; cols: number };
     maxMoves: number;
     availableTileTypes: number[]; // e.g., [0, 1, 2] for easier, [0,1,2,3,4,5] for harder

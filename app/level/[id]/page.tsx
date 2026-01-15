@@ -7,6 +7,7 @@ import { GameBoard } from "@/components/game/game-board";
 import { LevelHeader } from "@/components/game/level-header";
 import { LevelGoals } from "@/components/game/level-goals";
 import { LevelCompleteModal } from "@/components/game/level-complete-modal";
+import { LoadingScreen } from "@/components/game/loading-screen";
 
 export default function LevelPage() {
     const params = useParams();
@@ -22,8 +23,9 @@ export default function LevelPage() {
         getStarsForMoves,
     } = useLevelProgress();
 
-    const [goalProgress, setGoalProgress] = React.useState<Record<number, number>>({});
-    const [score, setScore] = React.useState(0);
+    const [goalProgress, setGoalProgress] = React.useState<
+        Record<number, number>
+    >({});
     const [movesUsed, setMovesUsed] = React.useState(0);
     const [showModal, setShowModal] = React.useState(false);
     const [isVictory, setIsVictory] = React.useState(false);
@@ -31,7 +33,6 @@ export default function LevelPage() {
     const [gameKey, setGameKey] = React.useState(0);
 
     const level = levels.find((l) => l.id === levelId);
-    const hasNextLevel = levels.some((l) => l.id === levelId + 1);
 
     // Redirect if level not unlocked
     React.useEffect(() => {
@@ -74,7 +75,6 @@ export default function LevelPage() {
     const handleRetry = React.useCallback(() => {
         setShowModal(false);
         setGoalProgress({});
-        setScore(0);
         setMovesUsed(0);
         setGameKey((prev) => prev + 1);
     }, []);
@@ -86,20 +86,12 @@ export default function LevelPage() {
         []
     );
 
-    const handleScoreUpdate = React.useCallback((newScore: number) => {
-        setScore(newScore);
-    }, []);
-
     const handleMovesUpdate = React.useCallback((newMovesUsed: number) => {
         setMovesUsed(newMovesUsed);
     }, []);
 
     if (isLoading) {
-        return (
-            <div className="flex min-h-screen items-center justify-center bg-background">
-                <div className="text-lg text-muted-foreground">Loading...</div>
-            </div>
-        );
+        return <LoadingScreen />;
     }
 
     if (error || !level) {
@@ -107,13 +99,13 @@ export default function LevelPage() {
             <div className="flex min-h-screen items-center justify-center bg-background">
                 <div className="text-center">
                     <div className="text-lg text-destructive mb-4">
-                        {error || "Level not found"}
+                        {error || "Уровень не найден"}
                     </div>
                     <button
                         onClick={() => router.push("/")}
                         className="px-4 py-2 rounded-lg bg-primary text-primary-foreground"
                     >
-                        Back to Levels
+                        Назад
                     </button>
                 </div>
             </div>
@@ -124,11 +116,7 @@ export default function LevelPage() {
 
     return (
         <div className="flex min-h-screen flex-col items-center justify-center bg-background p-4">
-            <LevelHeader
-                level={level}
-                movesRemaining={movesRemaining}
-                score={score}
-            />
+            <LevelHeader level={level} movesRemaining={movesRemaining} />
 
             <GameBoard
                 key={gameKey}
@@ -136,7 +124,6 @@ export default function LevelPage() {
                 onComplete={handleComplete}
                 onFailed={handleFailed}
                 onGoalProgressUpdate={handleGoalProgressUpdate}
-                onScoreUpdate={handleScoreUpdate}
                 onMovesUpdate={handleMovesUpdate}
             />
 
@@ -146,10 +133,7 @@ export default function LevelPage() {
                 isOpen={showModal}
                 isVictory={isVictory}
                 stars={stars}
-                levelId={levelId}
-                score={score}
                 onRetry={handleRetry}
-                hasNextLevel={hasNextLevel}
             />
         </div>
     );
