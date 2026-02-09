@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import { useParams, useRouter } from "next/navigation";
+import type { LevelGoal } from "@/lib/types";
 import { useLevelProgress } from "@/hooks/use-level-progress";
 import { GameBoard } from "@/components/game/game-board";
 import { LevelHeader } from "@/components/game/level-header";
@@ -26,6 +27,7 @@ export default function LevelPage() {
     const [goalProgress, setGoalProgress] = React.useState<
         Record<number, number>
     >({});
+    const [currentGoals, setCurrentGoals] = React.useState<LevelGoal[]>([]);
     const [movesUsed, setMovesUsed] = React.useState(0);
     const [showModal, setShowModal] = React.useState(false);
     const [isVictory, setIsVictory] = React.useState(false);
@@ -79,6 +81,10 @@ export default function LevelPage() {
         setGameKey((prev) => prev + 1);
     }, []);
 
+    const handleGoalsUpdate = React.useCallback((goals: LevelGoal[]) => {
+        setCurrentGoals(goals);
+    }, []);
+
     const handleGoalProgressUpdate = React.useCallback(
         (progress: Record<number, number>) => {
             setGoalProgress(progress);
@@ -125,9 +131,13 @@ export default function LevelPage() {
                 onFailed={handleFailed}
                 onGoalProgressUpdate={handleGoalProgressUpdate}
                 onMovesUpdate={handleMovesUpdate}
+                onGoalsUpdate={handleGoalsUpdate}
             />
 
-            <LevelGoals goals={level.goals} progress={goalProgress} />
+            <LevelGoals
+                goals={currentGoals.length > 0 ? currentGoals : level.goals}
+                progress={goalProgress}
+            />
 
             <LevelCompleteModal
                 isOpen={showModal}

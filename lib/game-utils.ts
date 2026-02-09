@@ -6,6 +6,9 @@ import {
     SPRITE_CONFIG,
     TILE_SPRITE_POSITIONS,
     BOMB_SPRITE_POSITIONS,
+    WOOD_NORMAL,
+    WOOD_BROKEN,
+    WOOD_SPRITE_POSITIONS,
 } from "./constants";
 
 // Counter for generating unique tile IDs
@@ -40,7 +43,14 @@ export function createTile(
  * Check if a tile type is a bomb
  */
 export function isBomb(tileType: number): boolean {
-    return tileType >= 100;
+    return tileType >= 100 && tileType < 200;
+}
+
+/**
+ * Check if a tile type is a wooden tile
+ */
+export function isWoodenTile(tileType: number): boolean {
+    return tileType === WOOD_NORMAL || tileType === WOOD_BROKEN;
 }
 
 /**
@@ -156,6 +166,8 @@ export function getTileSpriteStyle(tileType: number): React.CSSProperties {
 
     if (BOMB_SPRITE_POSITIONS[tileType]) {
         [spriteCol, spriteRow] = BOMB_SPRITE_POSITIONS[tileType];
+    } else if (WOOD_SPRITE_POSITIONS[tileType]) {
+        [spriteCol, spriteRow] = WOOD_SPRITE_POSITIONS[tileType];
     } else {
         // Regular tiles
         [spriteCol, spriteRow] = TILE_SPRITE_POSITIONS[tileType] || [0, 0];
@@ -184,21 +196,38 @@ export function areAdjacent(pos1: Position, pos2: Position): boolean {
 
 /**
  * Apply gravity to tiles - returns new tiles array with updated positions
+ * Wooden tiles stay in their positions, regular tiles fall through them
  */
 export function applyGravity(tiles: Tile[], rows: number, cols: number): Tile[] {
     let updatedTiles = tiles.map((t) => ({ ...t, isNew: false }));
 
     for (let col = 0; col < cols; col++) {
-        const tilesInCol = updatedTiles
-            .filter((t) => t.col === col)
-            .sort((a, b) => b.row - a.row); // Sort from bottom to top
-
+        const tilesInCol = updatedTiles.filter((t) => t.col === col);
+        
+        // Separate wooden tiles from regular tiles
+        const woodenTiles = tilesInCol.filter((t) => isWoodenTile(t.type));
+        const regularTiles = tilesInCol.filter((t) => !isWoodenTile(t.type));
+        
+        // Sort regular tiles from bottom to top
+        regularTiles.sort((a, b) => b.row - a.row);
+        
+        // Get positions occupied by wooden tiles in this column
+        const woodenPositions = new Set(woodenTiles.map((t) => t.row));
+        
+        // Fill regular tiles from bottom to top, skipping wooden tile positions
         let writeRow = rows - 1;
-        tilesInCol.forEach((tile) => {
-            updatedTiles = updatedTiles.map((t) =>
-                t.id === tile.id ? { ...t, row: writeRow } : t
-            );
-            writeRow--;
+        regularTiles.forEach((tile) => {
+            // Find next available position (skip wooden tiles)
+            while (woodenPositions.has(writeRow) && writeRow >= 0) {
+                writeRow--;
+            }
+            
+            if (writeRow >= 0) {
+                updatedTiles = updatedTiles.map((t) =>
+                    t.id === tile.id ? { ...t, row: writeRow } : t
+                );
+                writeRow--;
+            }
         });
     }
 

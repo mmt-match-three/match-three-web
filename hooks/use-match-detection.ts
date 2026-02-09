@@ -1,6 +1,6 @@
 import { useCallback } from "react";
 import type { Tile, Position, MatchInfo } from "@/lib/types";
-import { tilesToGrid, isBomb } from "@/lib/game-utils";
+import { tilesToGrid, isBomb, isWoodenTile } from "@/lib/game-utils";
 
 type UseMatchDetectionProps = {
     rows: number;
@@ -28,14 +28,16 @@ export function useMatchDetection({ rows, cols }: UseMatchDetectionProps) {
                     if (
                         cellType === currentType &&
                         currentType >= 0 &&
-                        !isBomb(currentType)
+                        !isBomb(currentType) &&
+                        !isWoodenTile(currentType)
                     ) {
                         count++;
                     } else {
                         if (
                             count >= 3 &&
                             currentType >= 0 &&
-                            !isBomb(currentType)
+                            !isBomb(currentType) &&
+                            !isWoodenTile(currentType)
                         ) {
                             const positions: Position[] = [];
                             for (let i = startCol; i < startCol + count; i++) {
@@ -71,14 +73,16 @@ export function useMatchDetection({ rows, cols }: UseMatchDetectionProps) {
                     if (
                         cellType === currentType &&
                         currentType >= 0 &&
-                        !isBomb(currentType)
+                        !isBomb(currentType) &&
+                        !isWoodenTile(currentType)
                     ) {
                         count++;
                     } else {
                         if (
                             count >= 3 &&
                             currentType >= 0 &&
-                            !isBomb(currentType)
+                            !isBomb(currentType) &&
+                            !isWoodenTile(currentType)
                         ) {
                             const positions: Position[] = [];
                             for (let i = startRow; i < startRow + count; i++) {

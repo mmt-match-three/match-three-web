@@ -4,6 +4,7 @@ import * as React from "react";
 import { useRouter } from "next/navigation";
 import type { Level, LevelProgress, LevelGoal } from "@/lib/types";
 import { getTileSpriteStyle } from "@/lib/game-utils";
+import { WOOD_NORMAL } from "@/lib/constants";
 
 type LevelMapProps = {
     levels: Level[];
@@ -72,6 +73,24 @@ function LevelPreviewModal({
     onPlay: () => void;
     onClose: () => void;
 }) {
+    // Compute enhanced goals including wooden tiles
+    const displayGoals = React.useMemo(() => {
+        const goals = [...level.goals];
+        
+        // Add wooden tile goal if level has wooden tiles
+        if (level.woodenTiles && level.woodenTiles.length > 0) {
+            const hasWoodenGoal = goals.some((g) => g.tileType === WOOD_NORMAL);
+            if (!hasWoodenGoal) {
+                goals.push({
+                    tileType: WOOD_NORMAL,
+                    count: level.woodenTiles.length,
+                });
+            }
+        }
+        
+        return goals;
+    }, [level.goals, level.woodenTiles]);
+
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
             {/* Backdrop */}
@@ -93,7 +112,7 @@ function LevelPreviewModal({
                         Цель
                     </div>
                     <div className="flex justify-center gap-6">
-                        {level.goals.map((goal, index) => (
+                        {displayGoals.map((goal, index) => (
                             <GoalPreview key={index} goal={goal} />
                         ))}
                     </div>

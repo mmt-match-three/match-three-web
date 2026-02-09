@@ -10,6 +10,10 @@ export const BOMB_VERTICAL = 100; // Clears entire column
 export const BOMB_HORIZONTAL = 101; // Clears entire row
 export const BOMB_AREA = 102; // Clears 5x5 area
 
+// Wooden tile types (stored in tile.type)
+export const WOOD_NORMAL = 200; // Normal wooden tile
+export const WOOD_BROKEN = 201; // Broken wooden tile
+
 // Sprite sheet configuration
 export const SPRITE_CONFIG = {
     cols: 4,
@@ -32,6 +36,12 @@ export const BOMB_SPRITE_POSITIONS: Record<number, [number, number]> = {
     [BOMB_VERTICAL]: [2, 8], // Column 3, Row 9
     [BOMB_HORIZONTAL]: [2, 7], // Column 3, Row 8
     [BOMB_AREA]: [0, 7], // Column 1, Row 8
+};
+
+// Sprite positions for wooden tiles [col, row] in 0-indexed
+export const WOOD_SPRITE_POSITIONS: Record<number, [number, number]> = {
+    [WOOD_NORMAL]: [0, 1], // Column 1, Row 2 (normal wooden tile)
+    [WOOD_BROKEN]: [1, 1], // Column 2, Row 2 (broken wooden tile)
 };
 
 // Animation timings (in milliseconds)

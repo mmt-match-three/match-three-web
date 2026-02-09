@@ -42,6 +42,7 @@ export type Level = {
     availableTileTypes: number[]; // e.g., [0, 1, 2] for easier, [0,1,2,3,4,5] for harder
     goals: LevelGoal[];
     starThresholds: [number, number, number]; // moves remaining for 1, 2, 3 stars
+    woodenTiles?: Position[]; // Optional array of positions where wooden tiles spawn
 };
 
 // Progress for a completed level

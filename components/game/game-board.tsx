@@ -13,6 +13,7 @@ type GameBoardProps = {
     onFailed: () => void;
     onGoalProgressUpdate: (progress: Record<number, number>) => void;
     onMovesUpdate: (movesUsed: number) => void;
+    onGoalsUpdate?: (goals: typeof level.goals) => void;
 };
 
 export function GameBoard({
@@ -21,6 +22,7 @@ export function GameBoard({
     onFailed,
     onGoalProgressUpdate,
     onMovesUpdate,
+    onGoalsUpdate,
 }: GameBoardProps) {
     const containerRef = React.useRef<HTMLDivElement>(null);
     const [cellSize, setCellSize] = React.useState<number | null>(null);
@@ -38,6 +40,7 @@ export function GameBoard({
         isFailed,
         movesUsed,
         goalProgress,
+        goals,
         handleTileClick,
         handleSwap,
         setSelectedTile,
@@ -47,10 +50,18 @@ export function GameBoard({
         availableTileTypes: level.availableTileTypes,
         goals: level.goals,
         maxMoves: level.maxMoves,
+        woodenTilePositions: level.woodenTiles,
         onTilesDestroyed: () => {
             // Progress is tracked internally, we just notify parent
         },
     });
+
+    // Notify parent of enhanced goals (includes wooden tiles)
+    React.useEffect(() => {
+        if (onGoalsUpdate) {
+            onGoalsUpdate(goals);
+        }
+    }, [goals, onGoalsUpdate]);
 
     // Notify parent of goal progress changes
     React.useEffect(() => {

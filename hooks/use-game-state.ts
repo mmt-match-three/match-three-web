@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, useEffect } from "react";
+import { useState, useRef, useCallback, useEffect, useMemo } from "react";
 import type { Tile, Position, MatchInfo, LevelGoal, BombCreation } from "@/lib/types";
 import {
     createTile,
@@ -9,6 +9,7 @@ import {
     applyGravity,
     getRandomTileType,
     resetTileIdCounter,
+    isWoodenTile,
 } from "@/lib/game-utils";
 import {
     BOMB_VERTICAL,
@@ -16,6 +17,8 @@ import {
     BOMB_AREA,
     ANIMATION,
     POINTS_PER_TILE,
+    WOOD_NORMAL,
+    WOOD_BROKEN,
 } from "@/lib/constants";
 import { useMatchDetection } from "./use-match-detection";
 
@@ -25,6 +28,7 @@ type UseGameStateProps = {
     availableTileTypes: number[];
     goals: LevelGoal[];
     maxMoves: number;
+    woodenTilePositions?: Position[];
     onTilesDestroyed?: (destroyed: Record<number, number>) => void;
     onMoveComplete?: () => void;
 };
@@ -35,6 +39,7 @@ export function useGameState({
     availableTileTypes,
     goals,
     maxMoves,
+    woodenTilePositions = [],
     onTilesDestroyed,
     onMoveComplete,
 }: UseGameStateProps) {
@@ -50,17 +55,33 @@ export function useGameState({
     // Track if goals were met during animation - will be checked after animations settle
     const goalsMetDuringAnimation = useRef(false);
 
+    // Enhance goals with wooden tiles if present - memoized to prevent infinite loops
+    const enhancedGoals = useMemo(() => {
+        const enhanced = [...goals];
+        if (woodenTilePositions.length > 0) {
+            // Check if wooden tile goal already exists
+            const hasWoodenGoal = enhanced.some((g) => g.tileType === WOOD_NORMAL);
+            if (!hasWoodenGoal) {
+                enhanced.push({
+                    tileType: WOOD_NORMAL,
+                    count: woodenTilePositions.length,
+                });
+            }
+        }
+        return enhanced;
+    }, [goals, woodenTilePositions.length]);
+
     const { findMatches, isValidSwap } = useMatchDetection({ rows, cols });
 
     // Check if all goals are met
     const checkGoalsComplete = useCallback(
         (progress: Record<number, number>) => {
-            return goals.every((goal) => {
+            return enhancedGoals.every((goal) => {
                 const current = progress[goal.tileType] || 0;
                 return current >= goal.count;
             });
         },
-        [goals]
+        [enhancedGoals]
     );
 
     // Initialize the grid
@@ -69,9 +90,21 @@ export function useGameState({
         const initialTiles: Tile[] = [];
         const grid: number[][] = [];
 
+        // Create set of wooden tile positions for quick lookup
+        const woodenPositionsSet = new Set(
+            woodenTilePositions.map((pos) => `${pos.row},${pos.col}`)
+        );
+
+        // Fill grid with regular tiles (wooden tiles will be placed on top)
         for (let row = 0; row < rows; row++) {
             grid[row] = [];
             for (let col = 0; col < cols; col++) {
+                // Skip wooden tile positions when creating regular tiles
+                if (woodenPositionsSet.has(`${row},${col}`)) {
+                    grid[row][col] = -1; // Mark as occupied by wooden tile
+                    continue;
+                }
+
                 let tileType: number;
                 let attempts = 0;
                 do {
@@ -85,16 +118,27 @@ export function useGameState({
             }
         }
 
+        // Add wooden tiles at their specified positions
+        woodenTilePositions.forEach((pos) => {
+            initialTiles.push(createTile(WOOD_NORMAL, pos.row, pos.col));
+        });
+
+        // Add wooden tiles to goals automatically
+        const updatedGoalProgress: Record<number, number> = {};
+        if (woodenTilePositions.length > 0) {
+            updatedGoalProgress[WOOD_NORMAL] = 0;
+        }
+
         setTiles(initialTiles);
         setScore(0);
         setMovesUsed(0);
-        setGoalProgress({});
+        setGoalProgress(updatedGoalProgress);
         setSelectedTile(null);
         setIsAnimating(false);
         setIsComplete(false);
         setIsFailed(false);
         goalsMetDuringAnimation.current = false;
-    }, [rows, cols, availableTileTypes]);
+    }, [rows, cols, availableTileTypes, woodenTilePositions]);
 
     // Initialize on mount
     useEffect(() => {
@@ -175,6 +219,38 @@ export function useGameState({
             const roundScore = matchedPositions.size * POINTS_PER_TILE;
             setScore((prev) => prev + roundScore);
 
+            // Handle wooden tile damage from adjacent bomb explosions
+            const woodenTilesToDamage = new Map<string, Tile>();
+            const adjacentOffsets = [
+                { row: -1, col: 0 }, // up
+                { row: 1, col: 0 },  // down
+                { row: 0, col: -1 }, // left
+                { row: 0, col: 1 },  // right
+            ];
+
+            matchedPositions.forEach((posKey) => {
+                const [matchRow, matchCol] = posKey.split(",").map(Number);
+                
+                // Check all 4 adjacent positions
+                adjacentOffsets.forEach(({ row: offsetRow, col: offsetCol }) => {
+                    const adjRow = matchRow + offsetRow;
+                    const adjCol = matchCol + offsetCol;
+                    
+                    // Check bounds
+                    if (adjRow >= 0 && adjRow < rows && adjCol >= 0 && adjCol < cols) {
+                        const adjTile = getTileAt(currentTiles, adjRow, adjCol);
+                        
+                        if (adjTile && isWoodenTile(adjTile.type)) {
+                            const adjKey = `${adjRow},${adjCol}`;
+                            // Store the wooden tile to damage
+                            if (!woodenTilesToDamage.has(adjKey)) {
+                                woodenTilesToDamage.set(adjKey, adjTile);
+                            }
+                        }
+                    }
+                });
+            });
+
             // Mark tiles for removal and track destroyed
             const tilesToRemove = new Set<string>();
             const destroyedTiles: Tile[] = [];
@@ -187,13 +263,33 @@ export function useGameState({
                 }
             });
 
-            updateGoalProgress(destroyedTiles);
+            // Damage wooden tiles and track destroyed ones
+            const damagedWoodenTiles: Tile[] = [];
+            woodenTilesToDamage.forEach((woodTile) => {
+                if (woodTile.type === WOOD_BROKEN) {
+                    // Broken -> Destroyed (remove completely)
+                    tilesToRemove.add(woodTile.id);
+                    damagedWoodenTiles.push(woodTile);
+                }
+            });
 
-            // Animate removal
+            updateGoalProgress([...destroyedTiles, ...damagedWoodenTiles]);
+
+            // Animate removal and damage wooden tiles
             setTiles((prev) =>
-                prev.map((t) =>
-                    tilesToRemove.has(t.id) ? { ...t, isRemoving: true } : t
-                )
+                prev.map((t) => {
+                    if (tilesToRemove.has(t.id)) {
+                        return { ...t, isRemoving: true };
+                    }
+                    // Damage wooden tiles: Normal -> Broken
+                    const woodTile = Array.from(woodenTilesToDamage.values()).find(
+                        (wt) => wt.id === t.id
+                    );
+                    if (woodTile && woodTile.type === WOOD_NORMAL) {
+                        return { ...t, type: WOOD_BROKEN };
+                    }
+                    return t;
+                })
             );
 
             await new Promise((resolve) => setTimeout(resolve, ANIMATION.REMOVAL_DURATION));
@@ -425,6 +521,38 @@ export function useGameState({
                 const roundScore = matchedPositions.size * POINTS_PER_TILE;
                 setScore((prev) => prev + roundScore);
 
+                // Handle wooden tile damage from adjacent matches
+                const woodenTilesToDamage = new Map<string, Tile>();
+                const adjacentOffsets = [
+                    { row: -1, col: 0 }, // up
+                    { row: 1, col: 0 },  // down
+                    { row: 0, col: -1 }, // left
+                    { row: 0, col: 1 },  // right
+                ];
+
+                matchedPositions.forEach((posKey) => {
+                    const [matchRow, matchCol] = posKey.split(",").map(Number);
+                    
+                    // Check all 4 adjacent positions
+                    adjacentOffsets.forEach(({ row: offsetRow, col: offsetCol }) => {
+                        const adjRow = matchRow + offsetRow;
+                        const adjCol = matchCol + offsetCol;
+                        
+                        // Check bounds
+                        if (adjRow >= 0 && adjRow < rows && adjCol >= 0 && adjCol < cols) {
+                            const adjTile = getTileAt(currentTiles, adjRow, adjCol);
+                            
+                            if (adjTile && isWoodenTile(adjTile.type)) {
+                                const adjKey = `${adjRow},${adjCol}`;
+                                // Store the wooden tile to damage (avoid damaging same tile multiple times)
+                                if (!woodenTilesToDamage.has(adjKey)) {
+                                    woodenTilesToDamage.set(adjKey, adjTile);
+                                }
+                            }
+                        }
+                    });
+                });
+
                 // Mark matched tiles for removal
                 const tilesToRemove = new Set<string>();
                 const destroyedTiles: Tile[] = [];
@@ -437,13 +565,36 @@ export function useGameState({
                     }
                 });
 
-                updateGoalProgress(destroyedTiles);
+                // Damage wooden tiles and track destroyed ones
+                const damagedWoodenTiles: Tile[] = [];
+                woodenTilesToDamage.forEach((woodTile) => {
+                    if (woodTile.type === WOOD_NORMAL) {
+                        // Normal -> Broken (don't remove, just update type)
+                        // This will be handled in the tile update below
+                    } else if (woodTile.type === WOOD_BROKEN) {
+                        // Broken -> Destroyed (remove completely)
+                        tilesToRemove.add(woodTile.id);
+                        damagedWoodenTiles.push(woodTile);
+                    }
+                });
 
-                // Animate removal
+                updateGoalProgress([...destroyedTiles, ...damagedWoodenTiles]);
+
+                // Animate removal and damage wooden tiles
                 setTiles((prev) =>
-                    prev.map((t) =>
-                        tilesToRemove.has(t.id) ? { ...t, isRemoving: true } : t
-                    )
+                    prev.map((t) => {
+                        if (tilesToRemove.has(t.id)) {
+                            return { ...t, isRemoving: true };
+                        }
+                        // Damage wooden tiles: Normal -> Broken
+                        const woodTile = Array.from(woodenTilesToDamage.values()).find(
+                            (wt) => wt.id === t.id
+                        );
+                        if (woodTile && woodTile.type === WOOD_NORMAL) {
+                            return { ...t, type: WOOD_BROKEN };
+                        }
+                        return t;
+                    })
                 );
 
                 await new Promise((resolve) =>
@@ -531,6 +682,12 @@ export function useGameState({
             const clickedTile = getTileAt(currentTiles, row, col);
             const clickedPos = { row, col };
 
+            // Wooden tiles cannot be selected or swapped
+            if (clickedTile && isWoodenTile(clickedTile.type)) {
+                setSelectedTile(null);
+                return;
+            }
+
             // If clicking on a bomb (with no selection or same bomb selected), explode it
             if (clickedTile && isBomb(clickedTile.type)) {
                 if (
@@ -589,6 +746,11 @@ export function useGameState({
             const tile2 = getTileAt(currentTiles, to.row, to.col);
 
             if (!tile1 || !tile2) return;
+
+            // Cannot swap wooden tiles
+            if (isWoodenTile(tile1.type) || isWoodenTile(tile2.type)) {
+                return;
+            }
 
             const tile1IsBomb = isBomb(tile1.type);
             const tile2IsBomb = isBomb(tile2.type);
@@ -703,6 +865,37 @@ export function useGameState({
                     const roundScore = matchedPositions.size * POINTS_PER_TILE;
                     setScore((prev) => prev + roundScore);
 
+                    // Handle wooden tile damage from adjacent bomb explosions
+                    const woodenTilesToDamage = new Map<string, Tile>();
+                    const adjacentOffsets = [
+                        { row: -1, col: 0 }, // up
+                        { row: 1, col: 0 },  // down
+                        { row: 0, col: -1 }, // left
+                        { row: 0, col: 1 },  // right
+                    ];
+
+                    matchedPositions.forEach((posKey) => {
+                        const [matchRow, matchCol] = posKey.split(",").map(Number);
+                        
+                        // Check all 4 adjacent positions
+                        adjacentOffsets.forEach(({ row: offsetRow, col: offsetCol }) => {
+                            const adjRow = matchRow + offsetRow;
+                            const adjCol = matchCol + offsetCol;
+                            
+                            // Check bounds
+                            if (adjRow >= 0 && adjRow < rows && adjCol >= 0 && adjCol < cols) {
+                                const adjTile = getTileAt(currentTiles, adjRow, adjCol);
+                                
+                                if (adjTile && isWoodenTile(adjTile.type)) {
+                                    const adjKey = `${adjRow},${adjCol}`;
+                                    if (!woodenTilesToDamage.has(adjKey)) {
+                                        woodenTilesToDamage.set(adjKey, adjTile);
+                                    }
+                                }
+                            }
+                        });
+                    });
+
                     const tilesToRemove = new Set<string>();
                     const destroyedTiles: Tile[] = [];
                     matchedPositions.forEach((posKey) => {
@@ -714,12 +907,31 @@ export function useGameState({
                         }
                     });
 
-                    updateGoalProgress(destroyedTiles);
+                    // Damage wooden tiles and track destroyed ones
+                    const damagedWoodenTiles: Tile[] = [];
+                    woodenTilesToDamage.forEach((woodTile) => {
+                        if (woodTile.type === WOOD_BROKEN) {
+                            tilesToRemove.add(woodTile.id);
+                            damagedWoodenTiles.push(woodTile);
+                        }
+                    });
+
+                    updateGoalProgress([...destroyedTiles, ...damagedWoodenTiles]);
 
                     setTiles((prev) =>
-                        prev.map((t) =>
-                            tilesToRemove.has(t.id) ? { ...t, isRemoving: true } : t
-                        )
+                        prev.map((t) => {
+                            if (tilesToRemove.has(t.id)) {
+                                return { ...t, isRemoving: true };
+                            }
+                            // Damage wooden tiles: Normal -> Broken
+                            const woodTile = Array.from(woodenTilesToDamage.values()).find(
+                                (wt) => wt.id === t.id
+                            );
+                            if (woodTile && woodTile.type === WOOD_NORMAL) {
+                                return { ...t, type: WOOD_BROKEN };
+                            }
+                            return t;
+                        })
                     );
 
                     await new Promise((resolve) =>
@@ -807,6 +1019,7 @@ export function useGameState({
         movesUsed,
         movesRemaining: maxMoves - movesUsed,
         goalProgress,
+        goals: enhancedGoals,
         selectedTile,
         isAnimating,
         isComplete,
