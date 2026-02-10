@@ -2,173 +2,618 @@
   "levels": [
     {
       "id": 1,
-      "name": "Getting Started",
-      "dimensions": {
-        "rows": 5,
-        "cols": 5
-      },
-      "maxMoves": 15,
-      "availableTileTypes": [
-        0,
-        1,
-        2
-      ],
-      "goals": [
-        {
-          "tileType": 0,
-          "count": 10
-        }
-      ],
-      "starThresholds": [
-        0,
-        3,
-        6
-      ]
-    },
-    {
-      "id": 2,
-      "name": "Easy Match",
-      "dimensions": {
-        "rows": 5,
-        "cols": 5
-      },
-      "maxMoves": 18,
-      "availableTileTypes": [
-        0,
-        1,
-        2,
-        3
-      ],
-      "goals": [
-        {
-          "tileType": 1,
-          "count": 8
-        },
-        {
-          "tileType": 2,
-          "count": 8
-        }
-      ],
-      "starThresholds": [
-        0,
-        4,
-        8
-      ]
-    },
-    {
-      "id": 3,
-      "name": "Growing Board",
       "dimensions": {
         "rows": 6,
         "cols": 6
       },
       "maxMoves": 20,
       "availableTileTypes": [
-        0,
         1,
-        2,
-        3
+        3,
+        5
       ],
       "goals": [
         {
-          "tileType": 0,
-          "count": 15
+          "tileType": 3,
+          "count": 32
         }
       ],
       "starThresholds": [
         0,
-        5,
-        10
+        4,
+        8
       ],
-      "woodenTiles": [
-        {
-          "row": 2,
-          "col": 2
-        },
-        {
-          "row": 2,
-          "col": 3
-        },
-        {
-          "row": 3,
-          "col": 2
-        },
-        {
-          "row": 3,
-          "col": 3
-        }
-      ]
+      "accidentalMatchesChance": 35
     },
     {
-      "id": 4,
-      "name": "Triple Trouble",
+      "id": 2,
       "dimensions": {
         "rows": 6,
         "cols": 6
       },
-      "maxMoves": 22,
+      "maxMoves": 20,
       "availableTileTypes": [
-        0,
         1,
-        2,
         3,
-        4
+        5
       ],
       "goals": [
         {
-          "tileType": 0,
-          "count": 10
-        },
-        {
           "tileType": 1,
-          "count": 10
+          "count": 32
         },
         {
-          "tileType": 2,
-          "count": 10
+          "tileType": 3,
+          "count": 32
         }
       ],
       "starThresholds": [
         0,
-        5,
-        10
-      ]
+        4,
+        8
+      ],
+      "accidentalMatchesChance": 35
     },
     {
-      "id": 5,
-      "name": "Full House",
+      "id": 3,
+      "dimensions": {
+        "rows": 6,
+        "cols": 6
+      },
+      "maxMoves": 30,
+      "availableTileTypes": [
+        0,
+        1,
+        3,
+        5
+      ],
+      "goals": [
+        {
+          "tileType": 3,
+          "count": 24
+        },
+        {
+          "tileType": 5,
+          "count": 24
+        }
+      ],
+      "starThresholds": [
+        0,
+        4,
+        8
+      ],
+      "woodenTiles": [
+        {
+          "row": 0,
+          "col": 2
+        },
+        {
+          "row": 0,
+          "col": 3
+        },
+        {
+          "row": 1,
+          "col": 2
+        },
+        {
+          "row": 1,
+          "col": 3
+        },
+        {
+          "row": 2,
+          "col": 2
+        },
+        {
+          "row": 2,
+          "col": 3
+        },
+        {
+          "row": 3,
+          "col": 2
+        },
+        {
+          "row": 3,
+          "col": 3
+        },
+        {
+          "row": 4,
+          "col": 2
+        },
+        {
+          "row": 4,
+          "col": 3
+        },
+        {
+          "row": 5,
+          "col": 2
+        },
+        {
+          "row": 5,
+          "col": 3
+        }
+      ],
+      "accidentalMatchesChance": 35
+    },
+    {
+      "id": 4,
       "dimensions": {
         "rows": 7,
         "cols": 7
       },
-      "maxMoves": 25,
+      "maxMoves": 45,
       "availableTileTypes": [
         0,
         1,
-        2,
+        3,
+        5
+      ],
+      "goals": [
+        {
+          "tileType": 3,
+          "count": 26
+        }
+      ],
+      "starThresholds": [
+        0,
+        13,
+        17
+      ],
+      "woodenTiles": [
+        {
+          "row": 4,
+          "col": 0
+        },
+        {
+          "row": 4,
+          "col": 1
+        },
+        {
+          "row": 4,
+          "col": 2
+        },
+        {
+          "row": 4,
+          "col": 3
+        },
+        {
+          "row": 4,
+          "col": 4
+        },
+        {
+          "row": 4,
+          "col": 5
+        },
+        {
+          "row": 4,
+          "col": 6
+        },
+        {
+          "row": 5,
+          "col": 0
+        },
+        {
+          "row": 5,
+          "col": 1
+        },
+        {
+          "row": 5,
+          "col": 2
+        },
+        {
+          "row": 5,
+          "col": 3
+        },
+        {
+          "row": 5,
+          "col": 4
+        },
+        {
+          "row": 5,
+          "col": 5
+        },
+        {
+          "row": 5,
+          "col": 6
+        },
+        {
+          "row": 6,
+          "col": 0
+        },
+        {
+          "row": 6,
+          "col": 1
+        },
+        {
+          "row": 6,
+          "col": 2
+        },
+        {
+          "row": 6,
+          "col": 3
+        },
+        {
+          "row": 6,
+          "col": 4
+        },
+        {
+          "row": 6,
+          "col": 5
+        },
+        {
+          "row": 6,
+          "col": 6
+        }
+      ],
+      "accidentalMatchesChance": 35
+    },
+    {
+      "id": 5,
+      "dimensions": {
+        "rows": 7,
+        "cols": 7
+      },
+      "maxMoves": 33,
+      "availableTileTypes": [
+        0,
+        1,
         3,
         4,
         5
       ],
       "goals": [
         {
-          "tileType": 3,
-          "count": 15
+          "tileType": 4,
+          "count": 24
+        }
+      ],
+      "starThresholds": [
+        0,
+        4,
+        8
+      ],
+      "woodenTiles": [
+        {
+          "row": 2,
+          "col": 2
         },
         {
-          "tileType": 4,
-          "count": 15
+          "row": 2,
+          "col": 3
+        },
+        {
+          "row": 2,
+          "col": 4
+        },
+        {
+          "row": 3,
+          "col": 2
+        },
+        {
+          "row": 3,
+          "col": 3
+        },
+        {
+          "row": 3,
+          "col": 4
+        },
+        {
+          "row": 4,
+          "col": 2
+        },
+        {
+          "row": 4,
+          "col": 3
+        },
+        {
+          "row": 4,
+          "col": 4
+        }
+      ],
+      "accidentalMatchesChance": 35
+    },
+    {
+      "id": 6,
+      "dimensions": {
+        "rows": 7,
+        "cols": 7
+      },
+      "maxMoves": 32,
+      "availableTileTypes": [
+        0,
+        1,
+        3,
+        5
+      ],
+      "goals": [
+        {
+          "tileType": 0,
+          "count": 24
+        },
+        {
+          "tileType": 3,
+          "count": 24
         }
       ],
       "starThresholds": [
         0,
         6,
-        12
+        14
       ],
       "woodenTiles": [
         {
           "row": 1,
+          "col": 2
+        },
+        {
+          "row": 1,
+          "col": 4
+        },
+        {
+          "row": 2,
+          "col": 1
+        },
+        {
+          "row": 2,
           "col": 3
+        },
+        {
+          "row": 2,
+          "col": 5
+        },
+        {
+          "row": 3,
+          "col": 2
+        },
+        {
+          "row": 3,
+          "col": 4
+        },
+        {
+          "row": 4,
+          "col": 1
+        },
+        {
+          "row": 4,
+          "col": 3
+        },
+        {
+          "row": 4,
+          "col": 5
+        },
+        {
+          "row": 5,
+          "col": 2
+        },
+        {
+          "row": 5,
+          "col": 4
+        }
+      ],
+      "accidentalMatchesChance": 40
+    },
+    {
+      "id": 7,
+      "dimensions": {
+        "rows": 7,
+        "cols": 7
+      },
+      "maxMoves": 47,
+      "availableTileTypes": [
+        0,
+        1,
+        3,
+        4,
+        5
+      ],
+      "goals": [
+        {
+          "tileType": 0,
+          "count": 26
+        }
+      ],
+      "starThresholds": [
+        0,
+        14,
+        18
+      ],
+      "woodenTiles": [
+        {
+          "row": 0,
+          "col": 0
+        },
+        {
+          "row": 1,
+          "col": 0
+        },
+        {
+          "row": 2,
+          "col": 0
+        },
+        {
+          "row": 3,
+          "col": 0
+        },
+        {
+          "row": 4,
+          "col": 0
+        },
+        {
+          "row": 5,
+          "col": 0
+        },
+        {
+          "row": 6,
+          "col": 0
+        },
+        {
+          "row": 0,
+          "col": 6
+        },
+        {
+          "row": 1,
+          "col": 6
+        },
+        {
+          "row": 2,
+          "col": 6
+        },
+        {
+          "row": 3,
+          "col": 6
+        },
+        {
+          "row": 4,
+          "col": 6
+        },
+        {
+          "row": 5,
+          "col": 6
+        },
+        {
+          "row": 6,
+          "col": 6
+        }
+      ],
+      "accidentalMatchesChance": 40
+    },
+    {
+      "id": 8,
+      "dimensions": {
+        "rows": 7,
+        "cols": 7
+      },
+      "maxMoves": 24,
+      "availableTileTypes": [
+        1,
+        3,
+        4,
+        5
+      ],
+      "goals": [
+        {
+          "tileType": 4,
+          "count": 28
+        }
+      ],
+      "starThresholds": [
+        0,
+        4,
+        8
+      ],
+      "woodenTiles": [
+        {
+          "row": 0,
+          "col": 3
+        },
+        {
+          "row": 1,
+          "col": 3
+        },
+        {
+          "row": 2,
+          "col": 3
+        },
+        {
+          "row": 3,
+          "col": 3
+        },
+        {
+          "row": 4,
+          "col": 3
+        },
+        {
+          "row": 5,
+          "col": 3
+        },
+        {
+          "row": 6,
+          "col": 3
+        }
+      ],
+      "stoneTiles": [
+        {
+          "row": 0,
+          "col": 0
+        },
+        {
+          "row": 0,
+          "col": 1
+        },
+        {
+          "row": 1,
+          "col": 0
+        },
+        {
+          "row": 0,
+          "col": 5
+        },
+        {
+          "row": 0,
+          "col": 6
+        },
+        {
+          "row": 1,
+          "col": 6
+        },
+        {
+          "row": 5,
+          "col": 0
+        },
+        {
+          "row": 6,
+          "col": 1
+        },
+        {
+          "row": 6,
+          "col": 0
+        },
+        {
+          "row": 5,
+          "col": 6
+        },
+        {
+          "row": 6,
+          "col": 5
+        },
+        {
+          "row": 6,
+          "col": 6
+        }
+      ],
+      "accidentalMatchesChance": 40
+    },
+    {
+      "id": 9,
+      "dimensions": {
+        "rows": 7,
+        "cols": 7
+      },
+      "maxMoves": 35,
+      "availableTileTypes": [
+        0,
+        1,
+        3,
+        5
+      ],
+      "goals": [
+        {
+          "tileType": 3,
+          "count": 36
+        },
+        {
+          "tileType": 5,
+          "count": 36
+        }
+      ],
+      "starThresholds": [
+        0,
+        7,
+        11
+      ],
+      "woodenTiles": [
+        {
+          "row": 3,
+          "col": 0
         },
         {
           "row": 3,
@@ -176,223 +621,52 @@
         },
         {
           "row": 3,
-          "col": 5
-        },
-        {
-          "row": 5,
-          "col": 3
-        }
-      ]
-    },
-    {
-      "id": 6,
-      "name": "The Challenge",
-      "dimensions": {
-        "rows": 7,
-        "cols": 7
-      },
-      "maxMoves": 22,
-      "availableTileTypes": [
-        0,
-        1,
-        2,
-        3,
-        4,
-        5
-      ],
-      "goals": [
-        {
-          "tileType": 0,
-          "count": 20
-        },
-        {
-          "tileType": 5,
-          "count": 20
-        }
-      ],
-      "starThresholds": [
-        0,
-        5,
-        10
-      ]
-    },
-    {
-      "id": 7,
-      "name": "Standard Play",
-      "dimensions": {
-        "rows": 8,
-        "cols": 8
-      },
-      "maxMoves": 30,
-      "availableTileTypes": [
-        0,
-        1,
-        2,
-        3,
-        4,
-        5
-      ],
-      "goals": [
-        {
-          "tileType": 1,
-          "count": 25
-        },
-        {
-          "tileType": 2,
-          "count": 25
-        }
-      ],
-      "starThresholds": [
-        0,
-        8,
-        15
-      ]
-    },
-    {
-      "id": 8,
-      "name": "Grand Arena",
-      "dimensions": {
-        "rows": 8,
-        "cols": 8
-      },
-      "maxMoves": 28,
-      "availableTileTypes": [
-        0,
-        1,
-        2,
-        3,
-        4,
-        5
-      ],
-      "goals": [
-        {
-          "tileType": 0,
-          "count": 20
-        },
-        {
-          "tileType": 1,
-          "count": 20
-        },
-        {
-          "tileType": 2,
-          "count": 20
-        }
-      ],
-      "starThresholds": [
-        0,
-        7,
-        14
-      ],
-      "woodenTiles": [
-        {
-          "row": 2,
           "col": 2
-        },
-        {
-          "row": 2,
-          "col": 5
-        },
-        {
-          "row": 5,
-          "col": 2
-        },
-        {
-          "row": 5,
-          "col": 5
-        },
-        {
-          "row": 3,
-          "col": 3
         },
         {
           "row": 3,
           "col": 4
         },
         {
+          "row": 3,
+          "col": 5
+        },
+        {
+          "row": 3,
+          "col": 6
+        },
+        {
           "row": 4,
           "col": 3
         },
         {
-          "row": 4,
-          "col": 4
-        }
-      ]
-    },
-    {
-      "id": 9,
-      "name": "Expert Mode",
-      "dimensions": {
-        "rows": 8,
-        "cols": 8
-      },
-      "maxMoves": 25,
-      "availableTileTypes": [
-        0,
-        1,
-        2,
-        3,
-        4,
-        5
-      ],
-      "goals": [
-        {
-          "tileType": 3,
-          "count": 30
-        },
-        {
-          "tileType": 4,
-          "count": 30
-        },
-        {
-          "tileType": 5,
-          "count": 30
+          "row": 5,
+          "col": 3
         }
       ],
-      "starThresholds": [
-        0,
-        6,
-        12
-      ]
-    },
-    {
-      "id": 10,
-      "name": "Master Level",
-      "dimensions": {
-        "rows": 8,
-        "cols": 8
-      },
-      "maxMoves": 20,
-      "availableTileTypes": [
-        0,
-        1,
-        2,
-        3,
-        4,
-        5
-      ],
-      "goals": [
+      "stoneTiles": [
         {
-          "tileType": 0,
-          "count": 25
+          "row": 0,
+          "col": 3
         },
         {
-          "tileType": 1,
-          "count": 25
+          "row": 1,
+          "col": 3
         },
         {
-          "tileType": 2,
-          "count": 25
+          "row": 2,
+          "col": 3
         },
         {
-          "tileType": 3,
-          "count": 25
+          "row": 3,
+          "col": 3
+        },
+        {
+          "row": 6,
+          "col": 3
         }
       ],
-      "starThresholds": [
-        0,
-        5,
-        10
-      ]
+      "accidentalMatchesChance": 25
     }
   ]
 }
