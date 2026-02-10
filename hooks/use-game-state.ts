@@ -266,10 +266,14 @@ export function useGameState({
             // Damage wooden tiles and track destroyed ones
             const damagedWoodenTiles: Tile[] = [];
             woodenTilesToDamage.forEach((woodTile) => {
-                if (woodTile.type === WOOD_BROKEN) {
+                if (woodTile.type === WOOD_NORMAL) {
+                    // Normal -> Broken (don't remove, just update type)
+                    // DON'T track yet - only count when fully destroyed
+                } else if (woodTile.type === WOOD_BROKEN) {
                     // Broken -> Destroyed (remove completely)
                     tilesToRemove.add(woodTile.id);
-                    damagedWoodenTiles.push(woodTile);
+                    // NOW track as WOOD_NORMAL for goal progress (only when fully destroyed)
+                    damagedWoodenTiles.push({ ...woodTile, type: WOOD_NORMAL });
                 }
             });
 
@@ -570,11 +574,12 @@ export function useGameState({
                 woodenTilesToDamage.forEach((woodTile) => {
                     if (woodTile.type === WOOD_NORMAL) {
                         // Normal -> Broken (don't remove, just update type)
-                        // This will be handled in the tile update below
+                        // DON'T track yet - only count when fully destroyed
                     } else if (woodTile.type === WOOD_BROKEN) {
                         // Broken -> Destroyed (remove completely)
                         tilesToRemove.add(woodTile.id);
-                        damagedWoodenTiles.push(woodTile);
+                        // NOW track as WOOD_NORMAL for goal progress (only when fully destroyed)
+                        damagedWoodenTiles.push({ ...woodTile, type: WOOD_NORMAL });
                     }
                 });
 
@@ -910,9 +915,13 @@ export function useGameState({
                     // Damage wooden tiles and track destroyed ones
                     const damagedWoodenTiles: Tile[] = [];
                     woodenTilesToDamage.forEach((woodTile) => {
-                        if (woodTile.type === WOOD_BROKEN) {
+                        if (woodTile.type === WOOD_NORMAL) {
+                            // Normal -> Broken (don't remove, just update type)
+                            // DON'T track yet - only count when fully destroyed
+                        } else if (woodTile.type === WOOD_BROKEN) {
                             tilesToRemove.add(woodTile.id);
-                            damagedWoodenTiles.push(woodTile);
+                            // NOW track as WOOD_NORMAL for goal progress (only when fully destroyed)
+                            damagedWoodenTiles.push({ ...woodTile, type: WOOD_NORMAL });
                         }
                     });
 
