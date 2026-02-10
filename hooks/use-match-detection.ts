@@ -1,6 +1,6 @@
 import { useCallback } from "react";
 import type { Tile, Position, MatchInfo } from "@/lib/types";
-import { tilesToGrid, isBomb, isWoodenTile } from "@/lib/game-utils";
+import { tilesToGrid, isBomb, isWoodenTile, isStoneTile } from "@/lib/game-utils";
 
 type UseMatchDetectionProps = {
     rows: number;
@@ -29,7 +29,8 @@ export function useMatchDetection({ rows, cols }: UseMatchDetectionProps) {
                         cellType === currentType &&
                         currentType >= 0 &&
                         !isBomb(currentType) &&
-                        !isWoodenTile(currentType)
+                        !isWoodenTile(currentType) &&
+                        !isStoneTile(currentType)
                     ) {
                         count++;
                     } else {
@@ -37,7 +38,8 @@ export function useMatchDetection({ rows, cols }: UseMatchDetectionProps) {
                             count >= 3 &&
                             currentType >= 0 &&
                             !isBomb(currentType) &&
-                            !isWoodenTile(currentType)
+                            !isWoodenTile(currentType) &&
+                            !isStoneTile(currentType)
                         ) {
                             const positions: Position[] = [];
                             for (let i = startCol; i < startCol + count; i++) {
@@ -74,7 +76,8 @@ export function useMatchDetection({ rows, cols }: UseMatchDetectionProps) {
                         cellType === currentType &&
                         currentType >= 0 &&
                         !isBomb(currentType) &&
-                        !isWoodenTile(currentType)
+                        !isWoodenTile(currentType) &&
+                        !isStoneTile(currentType)
                     ) {
                         count++;
                     } else {
@@ -82,7 +85,8 @@ export function useMatchDetection({ rows, cols }: UseMatchDetectionProps) {
                             count >= 3 &&
                             currentType >= 0 &&
                             !isBomb(currentType) &&
-                            !isWoodenTile(currentType)
+                            !isWoodenTile(currentType) &&
+                            !isStoneTile(currentType)
                         ) {
                             const positions: Position[] = [];
                             for (let i = startRow; i < startRow + count; i++) {

@@ -17,6 +17,7 @@ import {
     getRandomTileType,
     resetTileIdCounter,
     isWoodenTile,
+    isStoneTile,
     tilesToGrid,
     hasValidMoves,
     reshuffleTiles,
@@ -29,6 +30,7 @@ import {
     POINTS_PER_TILE,
     WOOD_NORMAL,
     WOOD_BROKEN,
+    STONE_TILE,
 } from "@/lib/constants";
 import { useMatchDetection } from "./use-match-detection";
 
@@ -39,6 +41,7 @@ type UseGameStateProps = {
     goals: LevelGoal[];
     maxMoves: number;
     woodenTilePositions?: Position[];
+    stoneTilePositions?: Position[];
     accidentalMatchesChance?: number;
     onTilesDestroyed?: (destroyed: Record<number, number>) => void;
     onMoveComplete?: () => void;
@@ -51,6 +54,7 @@ export function useGameState({
     goals,
     maxMoves,
     woodenTilePositions = [],
+    stoneTilePositions = [],
     accidentalMatchesChance = 0,
     onTilesDestroyed,
     onMoveComplete,
@@ -191,18 +195,21 @@ export function useGameState({
         const initialTiles: Tile[] = [];
         const grid: number[][] = [];
 
-        // Create set of wooden tile positions for quick lookup
+        // Create set of wooden and stone tile positions for quick lookup
         const woodenPositionsSet = new Set(
             woodenTilePositions.map((pos) => `${pos.row},${pos.col}`),
         );
+        const stonePositionsSet = new Set(
+            stoneTilePositions.map((pos) => `${pos.row},${pos.col}`),
+        );
 
-        // Fill grid with regular tiles (wooden tiles will be placed on top)
+        // Fill grid with regular tiles (wooden and stone tiles will be placed on top)
         for (let row = 0; row < rows; row++) {
             grid[row] = [];
             for (let col = 0; col < cols; col++) {
-                // Skip wooden tile positions when creating regular tiles
-                if (woodenPositionsSet.has(`${row},${col}`)) {
-                    grid[row][col] = -1; // Mark as occupied by wooden tile
+                // Skip wooden and stone tile positions when creating regular tiles
+                if (woodenPositionsSet.has(`${row},${col}`) || stonePositionsSet.has(`${row},${col}`)) {
+                    grid[row][col] = -1; // Mark as occupied by immovable tile
                     continue;
                 }
 
@@ -244,7 +251,12 @@ export function useGameState({
             initialTiles.push(createTile(WOOD_NORMAL, pos.row, pos.col));
         });
 
-        // Add wooden tiles to goals automatically
+        // Add stone tiles at their specified positions
+        stoneTilePositions.forEach((pos) => {
+            initialTiles.push(createTile(STONE_TILE, pos.row, pos.col));
+        });
+
+        // Add wooden tiles to goals automatically (stone tiles are NOT added to goals)
         const updatedGoalProgress: Record<number, number> = {};
         if (woodenTilePositions.length > 0) {
             updatedGoalProgress[WOOD_NORMAL] = 0;
@@ -265,6 +277,7 @@ export function useGameState({
         cols,
         availableTileTypes,
         woodenTilePositions,
+        stoneTilePositions,
         accidentalMatchesChance,
     ]);
 
@@ -356,12 +369,13 @@ export function useGameState({
 
             // Mark tiles for removal and track destroyed
             // Wooden tiles should not be destroyed directly - they take damage instead
+            // Stone tiles are indestructible and should be completely skipped
             const tilesToRemove = new Set<string>();
             const destroyedTiles: Tile[] = [];
             matchedPositions.forEach((posKey) => {
                 const [r, c] = posKey.split(",").map(Number);
                 const tile = getTileAt(currentTiles, r, c);
-                if (tile && !isWoodenTile(tile.type)) {
+                if (tile && !isWoodenTile(tile.type) && !isStoneTile(tile.type)) {
                     tilesToRemove.add(tile.id);
                     destroyedTiles.push(tile);
                 } else if (tile && isWoodenTile(tile.type)) {
@@ -371,6 +385,7 @@ export function useGameState({
                         woodenTilesToDamage.set(woodKey, tile);
                     }
                 }
+                // Stone tiles are skipped entirely - they cannot be damaged or destroyed
             });
 
             // Damage wooden tiles and track destroyed ones
@@ -734,12 +749,13 @@ export function useGameState({
 
                 // Mark matched tiles for removal
                 // Wooden tiles should not be destroyed directly - they take damage instead
+                // Stone tiles are indestructible and should be completely skipped
                 const tilesToRemove = new Set<string>();
                 const destroyedTiles: Tile[] = [];
                 matchedPositions.forEach((posKey) => {
                     const [row, col] = posKey.split(",").map(Number);
                     const tile = getTileAt(currentTiles, row, col);
-                    if (tile && !isWoodenTile(tile.type)) {
+                    if (tile && !isWoodenTile(tile.type) && !isStoneTile(tile.type)) {
                         tilesToRemove.add(tile.id);
                         destroyedTiles.push(tile);
                     } else if (tile && isWoodenTile(tile.type)) {
@@ -749,6 +765,7 @@ export function useGameState({
                             woodenTilesToDamage.set(woodKey, tile);
                         }
                     }
+                    // Stone tiles are skipped entirely - they cannot be damaged or destroyed
                 });
 
                 // Damage wooden tiles and track destroyed ones
@@ -895,8 +912,8 @@ export function useGameState({
             const clickedTile = getTileAt(currentTiles, row, col);
             const clickedPos = { row, col };
 
-            // Wooden tiles cannot be selected or swapped
-            if (clickedTile && isWoodenTile(clickedTile.type)) {
+            // Wooden and stone tiles cannot be selected or swapped
+            if (clickedTile && (isWoodenTile(clickedTile.type) || isStoneTile(clickedTile.type))) {
                 setSelectedTile(null);
                 return;
             }
@@ -973,8 +990,8 @@ export function useGameState({
 
             if (!tile1 || !tile2) return;
 
-            // Cannot swap wooden tiles
-            if (isWoodenTile(tile1.type) || isWoodenTile(tile2.type)) {
+            // Cannot swap wooden or stone tiles
+            if (isWoodenTile(tile1.type) || isWoodenTile(tile2.type) || isStoneTile(tile1.type) || isStoneTile(tile2.type)) {
                 return;
             }
 
@@ -1111,12 +1128,13 @@ export function useGameState({
                     const woodenTilesToDamage = new Map<string, Tile>();
 
                     // Wooden tiles should not be destroyed directly - they take damage instead
+                    // Stone tiles are indestructible and should be completely skipped
                     const tilesToRemove = new Set<string>();
                     const destroyedTiles: Tile[] = [];
                     matchedPositions.forEach((posKey) => {
                         const [row, col] = posKey.split(",").map(Number);
                         const tile = getTileAt(currentTiles, row, col);
-                        if (tile && !isWoodenTile(tile.type)) {
+                        if (tile && !isWoodenTile(tile.type) && !isStoneTile(tile.type)) {
                             tilesToRemove.add(tile.id);
                             destroyedTiles.push(tile);
                         } else if (tile && isWoodenTile(tile.type)) {
@@ -1126,6 +1144,7 @@ export function useGameState({
                                 woodenTilesToDamage.set(woodKey, tile);
                             }
                         }
+                        // Stone tiles are skipped entirely - they cannot be damaged or destroyed
                     });
 
                     // Damage wooden tiles and track destroyed ones

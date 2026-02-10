@@ -43,6 +43,7 @@ export type Level = {
     goals: LevelGoal[];
     starThresholds: [number, number, number]; // moves remaining for 1, 2, 3 stars
     woodenTiles?: Position[]; // Optional array of positions where wooden tiles spawn
+    stoneTiles?: Position[]; // Optional array of positions where stone tiles spawn
     accidentalMatchesChance?: number; // Percentage chance of accidental matches (0-100)
 };
 

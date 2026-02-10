@@ -14,6 +14,9 @@ export const BOMB_AREA = 102; // Clears 5x5 area
 export const WOOD_NORMAL = 200; // Normal wooden tile
 export const WOOD_BROKEN = 201; // Broken wooden tile
 
+// Stone tile type (stored in tile.type)
+export const STONE_TILE = 300; // Indestructible stone tile
+
 // Sprite sheet configuration
 export const SPRITE_CONFIG = {
     cols: 4,
@@ -42,6 +45,11 @@ export const BOMB_SPRITE_POSITIONS: Record<number, [number, number]> = {
 export const WOOD_SPRITE_POSITIONS: Record<number, [number, number]> = {
     [WOOD_NORMAL]: [0, 1], // Column 1, Row 2 (normal wooden tile)
     [WOOD_BROKEN]: [1, 1], // Column 2, Row 2 (broken wooden tile)
+};
+
+// Sprite positions for stone tiles [col, row] in 0-indexed
+export const STONE_SPRITE_POSITIONS: Record<number, [number, number]> = {
+    [STONE_TILE]: [3, 7], // Column 4, Row 8 in 1-indexed
 };
 
 // Animation timings (in milliseconds)
