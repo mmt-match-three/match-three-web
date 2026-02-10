@@ -299,58 +299,25 @@ export function useGameState({
             const roundScore = matchedPositions.size * POINTS_PER_TILE;
             setScore((prev) => prev + roundScore);
 
-            // Handle wooden tile damage from adjacent bomb explosions
+            // Handle wooden tile damage - only tiles directly in explosion range
             const woodenTilesToDamage = new Map<string, Tile>();
-            const adjacentOffsets = [
-                { row: -1, col: 0 }, // up
-                { row: 1, col: 0 }, // down
-                { row: 0, col: -1 }, // left
-                { row: 0, col: 1 }, // right
-            ];
-
-            matchedPositions.forEach((posKey) => {
-                const [matchRow, matchCol] = posKey.split(",").map(Number);
-
-                // Check all 4 adjacent positions
-                adjacentOffsets.forEach(
-                    ({ row: offsetRow, col: offsetCol }) => {
-                        const adjRow = matchRow + offsetRow;
-                        const adjCol = matchCol + offsetCol;
-
-                        // Check bounds
-                        if (
-                            adjRow >= 0 &&
-                            adjRow < rows &&
-                            adjCol >= 0 &&
-                            adjCol < cols
-                        ) {
-                            const adjTile = getTileAt(
-                                currentTiles,
-                                adjRow,
-                                adjCol,
-                            );
-
-                            if (adjTile && isWoodenTile(adjTile.type)) {
-                                const adjKey = `${adjRow},${adjCol}`;
-                                // Store the wooden tile to damage
-                                if (!woodenTilesToDamage.has(adjKey)) {
-                                    woodenTilesToDamage.set(adjKey, adjTile);
-                                }
-                            }
-                        }
-                    },
-                );
-            });
 
             // Mark tiles for removal and track destroyed
+            // Wooden tiles should not be destroyed directly - they take damage instead
             const tilesToRemove = new Set<string>();
             const destroyedTiles: Tile[] = [];
             matchedPositions.forEach((posKey) => {
                 const [r, c] = posKey.split(",").map(Number);
                 const tile = getTileAt(currentTiles, r, c);
-                if (tile) {
+                if (tile && !isWoodenTile(tile.type)) {
                     tilesToRemove.add(tile.id);
                     destroyedTiles.push(tile);
+                } else if (tile && isWoodenTile(tile.type)) {
+                    // Wooden tiles in explosion area should be damaged, not destroyed
+                    const woodKey = `${r},${c}`;
+                    if (!woodenTilesToDamage.has(woodKey)) {
+                        woodenTilesToDamage.set(woodKey, tile);
+                    }
                 }
             });
 
@@ -664,7 +631,7 @@ export function useGameState({
                 const roundScore = matchedPositions.size * POINTS_PER_TILE;
                 setScore((prev) => prev + roundScore);
 
-                // Handle wooden tile damage from adjacent matches
+                // Handle wooden tile damage from adjacent matches (for regular matches)
                 const woodenTilesToDamage = new Map<string, Tile>();
                 const adjacentOffsets = [
                     { row: -1, col: 0 }, // up
@@ -711,14 +678,21 @@ export function useGameState({
                 });
 
                 // Mark matched tiles for removal
+                // Wooden tiles should not be destroyed directly - they take damage instead
                 const tilesToRemove = new Set<string>();
                 const destroyedTiles: Tile[] = [];
                 matchedPositions.forEach((posKey) => {
                     const [row, col] = posKey.split(",").map(Number);
                     const tile = getTileAt(currentTiles, row, col);
-                    if (tile) {
+                    if (tile && !isWoodenTile(tile.type)) {
                         tilesToRemove.add(tile.id);
                         destroyedTiles.push(tile);
+                    } else if (tile && isWoodenTile(tile.type)) {
+                        // Wooden tiles in explosion area should be damaged, not destroyed
+                        const woodKey = `${row},${col}`;
+                        if (!woodenTilesToDamage.has(woodKey)) {
+                            woodenTilesToDamage.set(woodKey, tile);
+                        }
                     }
                 });
 
@@ -1073,61 +1047,24 @@ export function useGameState({
                     const roundScore = matchedPositions.size * POINTS_PER_TILE;
                     setScore((prev) => prev + roundScore);
 
-                    // Handle wooden tile damage from adjacent bomb explosions
+                    // Handle wooden tile damage - only tiles directly in explosion range
                     const woodenTilesToDamage = new Map<string, Tile>();
-                    const adjacentOffsets = [
-                        { row: -1, col: 0 }, // up
-                        { row: 1, col: 0 }, // down
-                        { row: 0, col: -1 }, // left
-                        { row: 0, col: 1 }, // right
-                    ];
 
-                    matchedPositions.forEach((posKey) => {
-                        const [matchRow, matchCol] = posKey
-                            .split(",")
-                            .map(Number);
-
-                        // Check all 4 adjacent positions
-                        adjacentOffsets.forEach(
-                            ({ row: offsetRow, col: offsetCol }) => {
-                                const adjRow = matchRow + offsetRow;
-                                const adjCol = matchCol + offsetCol;
-
-                                // Check bounds
-                                if (
-                                    adjRow >= 0 &&
-                                    adjRow < rows &&
-                                    adjCol >= 0 &&
-                                    adjCol < cols
-                                ) {
-                                    const adjTile = getTileAt(
-                                        currentTiles,
-                                        adjRow,
-                                        adjCol,
-                                    );
-
-                                    if (adjTile && isWoodenTile(adjTile.type)) {
-                                        const adjKey = `${adjRow},${adjCol}`;
-                                        if (!woodenTilesToDamage.has(adjKey)) {
-                                            woodenTilesToDamage.set(
-                                                adjKey,
-                                                adjTile,
-                                            );
-                                        }
-                                    }
-                                }
-                            },
-                        );
-                    });
-
+                    // Wooden tiles should not be destroyed directly - they take damage instead
                     const tilesToRemove = new Set<string>();
                     const destroyedTiles: Tile[] = [];
                     matchedPositions.forEach((posKey) => {
                         const [row, col] = posKey.split(",").map(Number);
                         const tile = getTileAt(currentTiles, row, col);
-                        if (tile) {
+                        if (tile && !isWoodenTile(tile.type)) {
                             tilesToRemove.add(tile.id);
                             destroyedTiles.push(tile);
+                        } else if (tile && isWoodenTile(tile.type)) {
+                            // Wooden tiles in explosion area should be damaged, not destroyed
+                            const woodKey = `${row},${col}`;
+                            if (!woodenTilesToDamage.has(woodKey)) {
+                                woodenTilesToDamage.set(woodKey, tile);
+                            }
                         }
                     });
 
