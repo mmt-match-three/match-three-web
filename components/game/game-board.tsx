@@ -31,6 +31,12 @@ export function GameBoard({
     );
     const wasSwipeRef = React.useRef(false);
 
+    // Ensure stable reference for wooden tiles to prevent infinite loop
+    const woodenTilePositions = React.useMemo(
+        () => level.woodenTiles || [],
+        [level.woodenTiles]
+    );
+
     const {
         tiles,
         score,
@@ -50,7 +56,7 @@ export function GameBoard({
         availableTileTypes: level.availableTileTypes,
         goals: level.goals,
         maxMoves: level.maxMoves,
-        woodenTilePositions: level.woodenTiles,
+        woodenTilePositions: woodenTilePositions,
         onTilesDestroyed: () => {
             // Progress is tracked internally, we just notify parent
         },
