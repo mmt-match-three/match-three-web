@@ -93,6 +93,7 @@ export function getTileAt(
 
 /**
  * Check if placing a tile would create a match during grid initialization
+ * This is the simple version used during initial setup (left-to-right, top-to-bottom)
  */
 export function wouldCreateMatch(
     grid: number[][],
@@ -114,6 +115,80 @@ export function wouldCreateMatch(
         const up1 = grid[row - 1]?.[col];
         const up2 = grid[row - 2]?.[col];
         if (up1 === tileType && up2 === tileType) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+/**
+ * Check if placing a tile would create a match in ANY direction
+ * This comprehensive version checks all possible match configurations
+ */
+export function wouldCreateMatchComplete(
+    grid: number[][],
+    row: number,
+    col: number,
+    tileType: number
+): boolean {
+    const rows = grid.length;
+    const cols = grid[0]?.length || 0;
+
+    // Helper to safely get tile type
+    const getTile = (r: number, c: number): number => {
+        if (r < 0 || r >= rows || c < 0 || c >= cols) return -1;
+        return grid[r]?.[c] ?? -1;
+    };
+
+    // Check horizontal matches
+    // Pattern: [X][X][new]
+    if (col >= 2) {
+        const left1 = getTile(row, col - 1);
+        const left2 = getTile(row, col - 2);
+        if (left1 === tileType && left2 === tileType && left1 !== -1) {
+            return true;
+        }
+    }
+    // Pattern: [X][new][X]
+    if (col >= 1 && col < cols - 1) {
+        const left1 = getTile(row, col - 1);
+        const right1 = getTile(row, col + 1);
+        if (left1 === tileType && right1 === tileType && left1 !== -1) {
+            return true;
+        }
+    }
+    // Pattern: [new][X][X]
+    if (col < cols - 2) {
+        const right1 = getTile(row, col + 1);
+        const right2 = getTile(row, col + 2);
+        if (right1 === tileType && right2 === tileType && right1 !== -1) {
+            return true;
+        }
+    }
+
+    // Check vertical matches
+    // Pattern: [X][X][new] (vertically)
+    if (row >= 2) {
+        const up1 = getTile(row - 1, col);
+        const up2 = getTile(row - 2, col);
+        if (up1 === tileType && up2 === tileType && up1 !== -1) {
+            return true;
+        }
+    }
+    // Pattern: [X][new][X] (vertically)
+    if (row >= 1 && row < rows - 1) {
+        const up1 = getTile(row - 1, col);
+        const down1 = getTile(row + 1, col);
+        if (up1 === tileType && down1 === tileType && up1 !== -1) {
+            return true;
+        }
+    }
+    // Pattern: [new][X][X] (vertically)
+    if (row < rows - 2) {
+        const down1 = getTile(row + 1, col);
+        const down2 = getTile(row + 2, col);
+        if (down1 === tileType && down2 === tileType && down1 !== -1) {
             return true;
         }
     }

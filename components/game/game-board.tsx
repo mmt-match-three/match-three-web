@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import type { Level, PointerState, Position } from "@/lib/types";
+import type { Level, PointerState, Position, LevelGoal } from "@/lib/types";
 import { GRID_GAP, GRID_PADDING } from "@/lib/constants";
 import { areAdjacent } from "@/lib/game-utils";
 import { useGameState } from "@/hooks/use-game-state";
@@ -13,7 +13,7 @@ type GameBoardProps = {
     onFailed: () => void;
     onGoalProgressUpdate: (progress: Record<number, number>) => void;
     onMovesUpdate: (movesUsed: number) => void;
-    onGoalsUpdate?: (goals: typeof level.goals) => void;
+    onGoalsUpdate?: (goals: LevelGoal[]) => void;
 };
 
 export function GameBoard({
@@ -57,6 +57,7 @@ export function GameBoard({
         goals: level.goals,
         maxMoves: level.maxMoves,
         woodenTilePositions: woodenTilePositions,
+        accidentalMatchesChance: level.accidentalMatchesChance,
         onTilesDestroyed: () => {
             // Progress is tracked internally, we just notify parent
         },
