@@ -228,14 +228,9 @@ export function useGameState({
                         tileType,
                     );
 
-                    // If it would create a match, check against accidentalMatchesChance
-                    if (wouldMatch) {
-                        const randomChance = Math.random() * 100;
-                        if (randomChance < accidentalMatchesChance) {
-                            // Allow the match based on the chance
-                            break;
-                        }
-                    } else {
+                    // During initialization, NEVER allow matches regardless of accidentalMatchesChance
+                    // accidentalMatchesChance only applies to tiles falling in during gameplay
+                    if (!wouldMatch) {
                         // No match, use this tile
                         break;
                     }
