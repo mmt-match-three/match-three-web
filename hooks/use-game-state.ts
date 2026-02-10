@@ -18,6 +18,8 @@ import {
     resetTileIdCounter,
     isWoodenTile,
     tilesToGrid,
+    hasValidMoves,
+    reshuffleTiles,
 } from "@/lib/game-utils";
 import {
     BOMB_VERTICAL,
@@ -63,6 +65,7 @@ export function useGameState({
     const [isAnimating, setIsAnimating] = useState(false);
     const [isComplete, setIsComplete] = useState(false);
     const [isFailed, setIsFailed] = useState(false);
+    const [isReshuffling, setIsReshuffling] = useState(false);
 
     // Track if goals were met during animation - will be checked after animations settle
     const goalsMetDuringAnimation = useRef(false);
@@ -122,6 +125,54 @@ export function useGameState({
         },
         [availableTileTypes, rows, cols, accidentalMatchesChance]
     );
+
+    // Check for valid moves and reshuffle if necessary
+    const checkAndReshuffleIfNeeded = useCallback(async () => {
+        // Don't check if game is over or animating
+        if (isComplete || isFailed || isAnimating) return;
+
+        // Get current tiles
+        const currentTiles = await new Promise<Tile[]>((resolve) => {
+            setTiles((prev) => {
+                resolve(prev);
+                return prev;
+            });
+        });
+
+        // Check if there are valid moves
+        if (!hasValidMoves(currentTiles, rows, cols)) {
+            console.log("No valid moves detected, reshuffling...");
+            setIsReshuffling(true);
+            setIsAnimating(true);
+
+            // Wait a moment before reshuffling so player can see the state
+            await new Promise((resolve) => setTimeout(resolve, 500));
+
+            // Reshuffle tiles
+            setTiles((prev) => {
+                const reshuffled = reshuffleTiles(
+                    prev,
+                    rows,
+                    cols,
+                    availableTileTypes
+                );
+                return reshuffled;
+            });
+
+            // Wait for reshuffle animation
+            await new Promise((resolve) => setTimeout(resolve, 600));
+
+            setIsReshuffling(false);
+            setIsAnimating(false);
+        }
+    }, [
+        rows,
+        cols,
+        availableTileTypes,
+        isComplete,
+        isFailed,
+        isAnimating,
+    ]);
 
     // Check if all goals are met
     const checkGoalsComplete = useCallback(
@@ -207,6 +258,7 @@ export function useGameState({
         setIsAnimating(false);
         setIsComplete(false);
         setIsFailed(false);
+        setIsReshuffling(false);
         goalsMetDuringAnimation.current = false;
     }, [
         rows,
@@ -417,8 +469,11 @@ export function useGameState({
 
             // Continue with cascading matches
             await processMatches();
+
+            // Check if reshuffle is needed
+            await checkAndReshuffleIfNeeded();
         },
-        [rows, cols, availableTileTypes, updateGoalProgress],
+        [rows, cols, availableTileTypes, updateGoalProgress, checkAndReshuffleIfNeeded],
     );
 
     // Process matches, gravity, and cascades
@@ -822,8 +877,13 @@ export function useGameState({
                 goalsMetDuringAnimation.current = false;
                 setIsComplete(true);
             }
+
+            // Check if reshuffle is needed (after a short delay to ensure everything is settled)
+            setTimeout(() => {
+                checkAndReshuffleIfNeeded();
+            }, 100);
         },
-        [rows, cols, availableTileTypes, findMatches, updateGoalProgress],
+        [rows, cols, availableTileTypes, findMatches, updateGoalProgress, checkAndReshuffleIfNeeded],
     );
 
     // Handle tile click
@@ -1169,6 +1229,9 @@ export function useGameState({
             // Process any remaining matches
             await processMatches({ from, to });
 
+            // Check if reshuffle is needed
+            await checkAndReshuffleIfNeeded();
+
             onMoveComplete?.();
         },
         [
@@ -1182,6 +1245,7 @@ export function useGameState({
             isValidSwap,
             processMatches,
             updateGoalProgress,
+            checkAndReshuffleIfNeeded,
             onMoveComplete,
         ],
     );
@@ -1213,6 +1277,7 @@ export function useGameState({
         isAnimating,
         isComplete,
         isFailed,
+        isReshuffling,
         handleTileClick,
         handleSwap,
         setSelectedTile,

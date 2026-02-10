@@ -27,14 +27,14 @@ export function GameBoard({
     const containerRef = React.useRef<HTMLDivElement>(null);
     const [cellSize, setCellSize] = React.useState<number | null>(null);
     const [pointerStart, setPointerStart] = React.useState<PointerState | null>(
-        null
+        null,
     );
     const wasSwipeRef = React.useRef(false);
 
     // Ensure stable reference for wooden tiles to prevent infinite loop
     const woodenTilePositions = React.useMemo(
         () => level.woodenTiles || [],
-        [level.woodenTiles]
+        [level.woodenTiles],
     );
 
     const {
@@ -44,6 +44,7 @@ export function GameBoard({
         isAnimating,
         isComplete,
         isFailed,
+        isReshuffling,
         movesUsed,
         goalProgress,
         goals,
@@ -102,7 +103,7 @@ export function GameBoard({
                 const padding = GRID_PADDING * 2;
                 const gap = GRID_GAP * (level.dimensions.cols - 1);
                 setCellSize(
-                    (containerWidth - padding - gap) / level.dimensions.cols
+                    (containerWidth - padding - gap) / level.dimensions.cols,
                 );
             }
         };
@@ -134,7 +135,7 @@ export function GameBoard({
             }
             handleTileClick(row, col);
         },
-        [isAnimating, handleTileClick]
+        [isAnimating, handleTileClick],
     );
 
     // Handle mouse enter for drag swapping
@@ -162,16 +163,12 @@ export function GameBoard({
                 setSelectedTile(null);
             }
         },
-        [isAnimating, pointerStart, selectedTile, handleSwap, setSelectedTile]
+        [isAnimating, pointerStart, selectedTile, handleSwap, setSelectedTile],
     );
 
     // Handle pointer/touch start
     const handleStart = React.useCallback(
-        (
-            e: React.MouseEvent | React.TouchEvent,
-            row: number,
-            col: number
-        ) => {
+        (e: React.MouseEvent | React.TouchEvent, row: number, col: number) => {
             if (isAnimating) return;
 
             e.preventDefault();
@@ -194,7 +191,7 @@ export function GameBoard({
                 clientY,
             });
         },
-        [isAnimating]
+        [isAnimating],
     );
 
     // Handle pointer/touch end
@@ -256,7 +253,7 @@ export function GameBoard({
 
             setPointerStart(null);
         },
-        [pointerStart, level.dimensions, isAnimating, handleSwap]
+        [pointerStart, level.dimensions, isAnimating, handleSwap],
     );
 
     const isReady = tiles.length > 0 && cellSize !== null;
@@ -310,9 +307,7 @@ export function GameBoard({
                                 cellSize={cellSize}
                                 isSelected={isSelected}
                                 isAnimating={isAnimating}
-                                onClick={() =>
-                                    handleClick(tile.row, tile.col)
-                                }
+                                onClick={() => handleClick(tile.row, tile.col)}
                                 onMouseEnter={() =>
                                     handleMouseEnter(tile.row, tile.col)
                                 }
@@ -325,6 +320,17 @@ export function GameBoard({
                             />
                         );
                     })}
+                </div>
+            )}
+
+            {/* Reshuffle overlay */}
+            {isReshuffling && (
+                <div className="absolute inset-0 flex items-center justify-center bg-black/40 backdrop-blur-sm z-50 animate-in fade-in duration-300">
+                    <div className="bg-card border-2 border-primary rounded-lg px-6 py-4 shadow-xl animate-in zoom-in duration-300">
+                        <p className="text-lg font-bold text-primary">
+                            Перемешиваю..
+                        </p>
+                    </div>
                 </div>
             )}
         </div>
