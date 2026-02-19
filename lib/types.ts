@@ -12,6 +12,12 @@ export type Tile = {
     row: number;
     col: number;
     isRemoving?: boolean;
+    removalDelayMs?: number;
+    isMergingToBomb?: boolean;
+    mergeTargetRow?: number;
+    mergeTargetCol?: number;
+    isBombSpawning?: boolean;
+    bombSpawnDelayMs?: number;
     isNew?: boolean;
 };
 
@@ -80,3 +86,96 @@ export type BombCreation = {
     position: Position;
     bombType: number;
 };
+
+export type EffectOrientation = "horizontal" | "vertical";
+
+export type PackedSpriteRegionRef = {
+    sheet: "tilesEffects" | "tilesExplosion";
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+};
+
+export type SwapTrailEffectInstance = {
+    id: string;
+    type: "swapTrail";
+    from: Position;
+    to: Position;
+    orientation: EffectOrientation;
+    createdAt: number;
+    durationMs: number;
+    fadeInMs: number;
+    fadeOutMs: number;
+    maxOpacity: number;
+};
+
+export type TileBreakFragmentEffectInstance = {
+    id: string;
+    type: "tileBreakFragment";
+    row: number;
+    col: number;
+    fragment: PackedSpriteRegionRef;
+    launchAngleDeg: number;
+    initialSpeedScale: number;
+    spinDegPerSec: number;
+    createdAt: number;
+    maxOpacity: number;
+};
+
+export type TileBreakFlashEffectInstance = {
+    id: string;
+    type: "tileBreakFlash";
+    row: number;
+    col: number;
+    rotationDeg: number;
+    fadeInMs: number;
+    fadeOutMs: number;
+    maxOpacity: number;
+};
+
+export type AreaBombExplosionEffectInstance = {
+    id: string;
+    type: "areaBombExplosion";
+    row: number;
+    col: number;
+    createdAt: number;
+    frameCount: number;
+    frameDurationMs: number;
+    maxOpacity: number;
+};
+
+export type DirectionalBombPartEffectInstance = {
+    id: string;
+    type: "directionalBombPart";
+    row: number;
+    col: number;
+    axis: "horizontal" | "vertical";
+    directionSign: -1 | 1;
+    speedScale: number;
+    maxOpacity: number;
+};
+
+export type BombSpawnPreviewEffectInstance = {
+    id: string;
+    type: "bombSpawnPreview";
+    row: number;
+    col: number;
+    bombType: number;
+    delayMs: number;
+};
+
+export type BoardEffectType =
+    | "swapTrail"
+    | "tileBreakFragment"
+    | "tileBreakFlash"
+    | "areaBombExplosion"
+    | "directionalBombPart"
+    | "bombSpawnPreview";
+export type BoardEffectInstance =
+    | SwapTrailEffectInstance
+    | TileBreakFragmentEffectInstance
+    | TileBreakFlashEffectInstance
+    | AreaBombExplosionEffectInstance
+    | DirectionalBombPartEffectInstance
+    | BombSpawnPreviewEffectInstance;

@@ -5,6 +5,8 @@ import type {
     MatchInfo,
     LevelGoal,
     BombCreation,
+    BoardEffectInstance,
+    BombSpawnPreviewEffectInstance,
 } from "@/lib/types";
 import {
     createTile,
@@ -27,10 +29,17 @@ import {
     BOMB_HORIZONTAL,
     BOMB_AREA,
     ANIMATION,
+    BOMB_MERGE_EFFECT_CONFIG,
     POINTS_PER_TILE,
     WOOD_NORMAL,
     WOOD_BROKEN,
     STONE_TILE,
+    EFFECT_SPRITE_REGIONS,
+    TILE_BREAK_FRAGMENT_SPRITES,
+    TILE_BREAK_FRAGMENT_CONFIG,
+    TILE_BREAK_FLASH_CONFIG,
+    AREA_BOMB_EXPLOSION_CONFIG,
+    DIRECTIONAL_BOMB_BURST_CONFIG,
 } from "@/lib/constants";
 import { useMatchDetection } from "./use-match-detection";
 
@@ -70,9 +79,15 @@ export function useGameState({
     const [isComplete, setIsComplete] = useState(false);
     const [isFailed, setIsFailed] = useState(false);
     const [isReshuffling, setIsReshuffling] = useState(false);
+    const [swappingTileIds, setSwappingTileIds] = useState<string[]>([]);
+    const [activeEffects, setActiveEffects] = useState<BoardEffectInstance[]>(
+        [],
+    );
 
     // Track if goals were met during animation - will be checked after animations settle
     const goalsMetDuringAnimation = useRef(false);
+    const effectIdCounterRef = useRef(0);
+    const effectTimeoutsRef = useRef<ReturnType<typeof setTimeout>[]>([]);
 
     // Enhance goals with wooden tiles if present - memoized to prevent infinite loops
     const enhancedGoals = useMemo(() => {
@@ -94,9 +109,22 @@ export function useGameState({
 
     const { findMatches, isValidSwap } = useMatchDetection({ rows, cols });
 
+    useEffect(() => {
+        return () => {
+            effectTimeoutsRef.current.forEach((timeoutId) => {
+                clearTimeout(timeoutId);
+            });
+            effectTimeoutsRef.current = [];
+        };
+    }, []);
+
     // Helper function to get a random tile type that respects accidentalMatchesChance
     const getSmartTileType = useCallback(
-        (currentTiles: Tile[], targetRow: number, targetCol: number): number => {
+        (
+            currentTiles: Tile[],
+            targetRow: number,
+            targetCol: number,
+        ): number => {
             let tileType: number;
             let attempts = 0;
             const maxAttempts = 50;
@@ -108,9 +136,14 @@ export function useGameState({
 
                 // Build a temporary grid to check for matches
                 const tempGrid = tilesToGrid(currentTiles, rows, cols);
-                
+
                 // Check if tile would create a match at this position (using comprehensive check)
-                const wouldMatch = wouldCreateMatchComplete(tempGrid, targetRow, targetCol, tileType);
+                const wouldMatch = wouldCreateMatchComplete(
+                    tempGrid,
+                    targetRow,
+                    targetCol,
+                    tileType,
+                );
 
                 if (wouldMatch) {
                     // Roll a random chance to allow the match
@@ -127,7 +160,7 @@ export function useGameState({
 
             return tileType;
         },
-        [availableTileTypes, rows, cols, accidentalMatchesChance]
+        [availableTileTypes, rows, cols, accidentalMatchesChance],
     );
 
     // Check for valid moves and reshuffle if necessary
@@ -158,7 +191,7 @@ export function useGameState({
                     prev,
                     rows,
                     cols,
-                    availableTileTypes
+                    availableTileTypes,
                 );
                 return reshuffled;
             });
@@ -169,14 +202,7 @@ export function useGameState({
             setIsReshuffling(false);
             setIsAnimating(false);
         }
-    }, [
-        rows,
-        cols,
-        availableTileTypes,
-        isComplete,
-        isFailed,
-        isAnimating,
-    ]);
+    }, [rows, cols, availableTileTypes, isComplete, isFailed, isAnimating]);
 
     // Check if all goals are met
     const checkGoalsComplete = useCallback(
@@ -208,7 +234,10 @@ export function useGameState({
             grid[row] = [];
             for (let col = 0; col < cols; col++) {
                 // Skip wooden and stone tile positions when creating regular tiles
-                if (woodenPositionsSet.has(`${row},${col}`) || stonePositionsSet.has(`${row},${col}`)) {
+                if (
+                    woodenPositionsSet.has(`${row},${col}`) ||
+                    stonePositionsSet.has(`${row},${col}`)
+                ) {
                     grid[row][col] = -1; // Mark as occupied by immovable tile
                     continue;
                 }
@@ -266,6 +295,12 @@ export function useGameState({
         setIsComplete(false);
         setIsFailed(false);
         setIsReshuffling(false);
+        setSwappingTileIds([]);
+        setActiveEffects([]);
+        effectTimeoutsRef.current.forEach((timeoutId) =>
+            clearTimeout(timeoutId),
+        );
+        effectTimeoutsRef.current = [];
         goalsMetDuringAnimation.current = false;
     }, [
         rows,
@@ -326,34 +361,10 @@ export function useGameState({
                 });
             });
 
-            const matchedPositions = new Set<string>();
-            const processedBombs = new Set<string>();
-            const bombQueue = [bombTile];
-
-            // Process bomb chain reactions
-            while (bombQueue.length > 0) {
-                const bomb = bombQueue.shift()!;
-                if (processedBombs.has(bomb.id)) continue;
-                processedBombs.add(bomb.id);
-
-                const explosionPositions = getBombExplosionPositions(
-                    bomb,
-                    rows,
-                    cols,
-                );
-                explosionPositions.forEach((pos) => {
-                    matchedPositions.add(`${pos.row},${pos.col}`);
-
-                    const tileAtPos = getTileAt(currentTiles, pos.row, pos.col);
-                    if (
-                        tileAtPos &&
-                        isBomb(tileAtPos.type) &&
-                        !processedBombs.has(tileAtPos.id)
-                    ) {
-                        bombQueue.push(tileAtPos);
-                    }
-                });
-            }
+            const { positionHitDelayMs, bombExplosionEvents } =
+                collectBombPropagation([{ bomb: bombTile, delayMs: 0 }], currentTiles);
+            scheduleBombVisualEffects(bombExplosionEvents);
+            const matchedPositions = new Set(positionHitDelayMs.keys());
 
             // Calculate score
             const roundScore = matchedPositions.size * POINTS_PER_TILE;
@@ -366,13 +377,23 @@ export function useGameState({
             // Wooden tiles should not be destroyed directly - they take damage instead
             // Stone tiles are indestructible and should be completely skipped
             const tilesToRemove = new Set<string>();
+            const removalDelayByTileId = new Map<string, number>();
             const destroyedTiles: Tile[] = [];
             matchedPositions.forEach((posKey) => {
                 const [r, c] = posKey.split(",").map(Number);
                 const tile = getTileAt(currentTiles, r, c);
-                if (tile && !isWoodenTile(tile.type) && !isStoneTile(tile.type)) {
+                if (
+                    tile &&
+                    !isWoodenTile(tile.type) &&
+                    !isStoneTile(tile.type)
+                ) {
                     tilesToRemove.add(tile.id);
                     destroyedTiles.push(tile);
+                    const hitDelay = positionHitDelayMs.get(posKey) ?? 0;
+                    const previousDelay = removalDelayByTileId.get(tile.id);
+                    if (previousDelay === undefined || hitDelay < previousDelay) {
+                        removalDelayByTileId.set(tile.id, hitDelay);
+                    }
                 } else if (tile && isWoodenTile(tile.type)) {
                     // Wooden tiles in explosion area should be damaged, not destroyed
                     const woodKey = `${r},${c}`;
@@ -385,6 +406,9 @@ export function useGameState({
 
             // Damage wooden tiles and track destroyed ones
             const damagedWoodenTiles: Tile[] = [];
+            const woodenTilesForFragments = Array.from(
+                woodenTilesToDamage.values(),
+            );
             woodenTilesToDamage.forEach((woodTile) => {
                 if (woodTile.type === WOOD_NORMAL) {
                     // Normal -> Broken (don't remove, just update type)
@@ -403,21 +427,52 @@ export function useGameState({
             setTiles((prev) =>
                 prev.map((t) => {
                     if (tilesToRemove.has(t.id)) {
-                        return { ...t, isRemoving: true };
+                        return {
+                            ...t,
+                            isRemoving: true,
+                            removalDelayMs: removalDelayByTileId.get(t.id) ?? 0,
+                        };
                     }
                     // Damage wooden tiles: Normal -> Broken
                     const woodTile = Array.from(
                         woodenTilesToDamage.values(),
                     ).find((wt) => wt.id === t.id);
                     if (woodTile && woodTile.type === WOOD_NORMAL) {
-                        return { ...t, type: WOOD_BROKEN };
+                        return { ...t, type: WOOD_BROKEN, removalDelayMs: undefined };
                     }
-                    return t;
+                    return { ...t, removalDelayMs: undefined };
                 }),
             );
 
+            const tilesForFragmentEffects = [
+                ...destroyedTiles.map((tile) => ({
+                    ...tile,
+                    removalDelayMs: removalDelayByTileId.get(tile.id) ?? 0,
+                })),
+                ...woodenTilesForFragments.map((tile) => ({
+                    ...tile,
+                    removalDelayMs:
+                        positionHitDelayMs.get(`${tile.row},${tile.col}`) ?? 0,
+                })),
+            ];
             await new Promise((resolve) =>
-                setTimeout(resolve, ANIMATION.REMOVAL_DURATION),
+                setTimeout(resolve, ANIMATION.TILE_BREAK_FRAGMENT_SPAWN_DELAY),
+            );
+            enqueueTileBreakFragments(tilesForFragmentEffects);
+            const maxRemovalDelayMs =
+                removalDelayByTileId.size > 0
+                    ? Math.max(...removalDelayByTileId.values())
+                    : 0;
+            await new Promise((resolve) =>
+                setTimeout(
+                    resolve,
+                    Math.max(
+                        0,
+                        ANIMATION.REMOVAL_DURATION -
+                            ANIMATION.TILE_BREAK_FRAGMENT_SPAWN_DELAY +
+                            maxRemovalDelayMs,
+                    ),
+                ),
             );
 
             // Remove and refill
@@ -436,7 +491,9 @@ export function useGameState({
 
                     // Find which rows will be filled (from top)
                     const occupiedRows = new Set(
-                        afterGravity.filter((t) => t.col === c).map((t) => t.row),
+                        afterGravity
+                            .filter((t) => t.col === c)
+                            .map((t) => t.row),
                     );
                     const emptyRows: number[] = [];
                     for (let r = 0; r < rows; r++) {
@@ -449,10 +506,14 @@ export function useGameState({
                     for (let i = 0; i < tilesNeeded; i++) {
                         const startRow = -(tilesNeeded - i);
                         const finalRow = emptyRows[i];
-                        
+
                         // Get a smart tile type that respects accidentalMatchesChance
-                        const tileType = getSmartTileType(afterGravity, finalRow, c);
-                        
+                        const tileType = getSmartTileType(
+                            afterGravity,
+                            finalRow,
+                            c,
+                        );
+
                         const newTile = createTile(tileType, startRow, c, true);
                         newTiles.push(newTile);
                         // Update afterGravity simulation for next tile
@@ -483,7 +544,13 @@ export function useGameState({
             // Check if reshuffle is needed
             await checkAndReshuffleIfNeeded();
         },
-        [rows, cols, availableTileTypes, updateGoalProgress, checkAndReshuffleIfNeeded],
+        [
+            rows,
+            cols,
+            availableTileTypes,
+            updateGoalProgress,
+            checkAndReshuffleIfNeeded,
+        ],
     );
 
     // Process matches, gravity, and cascades
@@ -510,8 +577,11 @@ export function useGameState({
 
                 // Collect all matched positions and check for bombs
                 const matchedPositions = new Set<string>();
+                const positionHitDelayMs = new Map<string, number>();
                 const bombsToExplode: Tile[] = [];
                 const bombCreations: BombCreation[] = [];
+                const bombCreationByPosKey = new Map<string, BombCreation>();
+                const mergeTargetBySourcePosKey = new Map<string, Position>();
 
                 // Track which matches have been used for combined bombs (L/T/cross shapes)
                 const usedForCombinedBomb = new Set<MatchInfo>();
@@ -545,6 +615,25 @@ export function useGameState({
                         if (fromInMatch) return swapPositions.from;
                     }
                     return defaultPos;
+                };
+                const addBombCreation = (
+                    bombType: number,
+                    bombPos: Position,
+                    sourcePositions: Position[],
+                ) => {
+                    const bombPosKey = `${bombPos.row},${bombPos.col}`;
+                    if (!bombCreationByPosKey.has(bombPosKey)) {
+                        const creation = { position: bombPos, bombType };
+                        bombCreationByPosKey.set(bombPosKey, creation);
+                        bombCreations.push(creation);
+                    }
+                    sourcePositions.forEach((pos) => {
+                        const sourceKey = `${pos.row},${pos.col}`;
+                        if (sourceKey === bombPosKey) return;
+                        if (!mergeTargetBySourcePosKey.has(sourceKey)) {
+                            mergeTargetBySourcePosKey.set(sourceKey, bombPos);
+                        }
+                    });
                 };
 
                 // Check for L/T/cross shapes (matches of same type that intersect)
@@ -593,10 +682,11 @@ export function useGameState({
                                         allPositions,
                                         sharedPos,
                                     );
-                                    bombCreations.push({
-                                        position: bombPos,
-                                        bombType: BOMB_AREA,
-                                    });
+                                    addBombCreation(
+                                        BOMB_AREA,
+                                        bombPos,
+                                        allPositions,
+                                    );
                                     usedForCombinedBomb.add(match1);
                                     usedForCombinedBomb.add(match2);
                                 }
@@ -637,16 +727,13 @@ export function useGameState({
                         );
 
                         if (effectiveLen >= 5) {
-                            bombCreations.push({
-                                position: bombPos,
-                                bombType: BOMB_AREA,
-                            });
+                            addBombCreation(BOMB_AREA, bombPos, match.positions);
                         } else if (effectiveLen === 4) {
                             const bombType =
                                 match.direction === "horizontal"
                                     ? BOMB_VERTICAL
                                     : BOMB_HORIZONTAL;
-                            bombCreations.push({ position: bombPos, bombType });
+                            addBombCreation(bombType, bombPos, match.positions);
                         }
                     }
 
@@ -660,37 +747,21 @@ export function useGameState({
                     });
                 });
 
-                // Process bomb explosions (chain reaction)
-                const processedBombs = new Set<string>();
-                const bombQueue = [...bombsToExplode];
-
-                while (bombQueue.length > 0) {
-                    const bomb = bombQueue.shift()!;
-                    if (processedBombs.has(bomb.id)) continue;
-                    processedBombs.add(bomb.id);
-
-                    const explosionPositions = getBombExplosionPositions(
-                        bomb,
-                        rows,
-                        cols,
-                    );
-                    explosionPositions.forEach((pos) => {
-                        matchedPositions.add(`${pos.row},${pos.col}`);
-
-                        const tileAtPos = getTileAt(
-                            currentTiles,
-                            pos.row,
-                            pos.col,
-                        );
-                        if (
-                            tileAtPos &&
-                            isBomb(tileAtPos.type) &&
-                            !processedBombs.has(tileAtPos.id)
-                        ) {
-                            bombQueue.push(tileAtPos);
-                        }
-                    });
-                }
+                // Process bomb explosions (chain reaction) with travel delay propagation
+                const initialBombs = bombsToExplode.map((bomb) => ({
+                    bomb,
+                    delayMs: positionHitDelayMs.get(`${bomb.row},${bomb.col}`) ?? 0,
+                }));
+                const { positionHitDelayMs: bombHitDelays, bombExplosionEvents } =
+                    collectBombPropagation(initialBombs, currentTiles);
+                scheduleBombVisualEffects(bombExplosionEvents);
+                bombHitDelays.forEach((delayMs, posKey) => {
+                    matchedPositions.add(posKey);
+                    const existingDelay = positionHitDelayMs.get(posKey);
+                    if (existingDelay === undefined || delayMs < existingDelay) {
+                        positionHitDelayMs.set(posKey, delayMs);
+                    }
+                });
 
                 // Calculate score
                 const roundScore = matchedPositions.size * POINTS_PER_TILE;
@@ -746,13 +817,30 @@ export function useGameState({
                 // Wooden tiles should not be destroyed directly - they take damage instead
                 // Stone tiles are indestructible and should be completely skipped
                 const tilesToRemove = new Set<string>();
+                const removalDelayByTileId = new Map<string, number>();
                 const destroyedTiles: Tile[] = [];
+                const mergeSourcePosKeys = new Set<string>();
                 matchedPositions.forEach((posKey) => {
                     const [row, col] = posKey.split(",").map(Number);
                     const tile = getTileAt(currentTiles, row, col);
-                    if (tile && !isWoodenTile(tile.type) && !isStoneTile(tile.type)) {
+                    if (
+                        tile &&
+                        !isWoodenTile(tile.type) &&
+                        !isStoneTile(tile.type)
+                    ) {
+                        if (bombCreationByPosKey.has(posKey)) {
+                            return;
+                        }
                         tilesToRemove.add(tile.id);
                         destroyedTiles.push(tile);
+                        if (mergeTargetBySourcePosKey.has(posKey)) {
+                            mergeSourcePosKeys.add(posKey);
+                        }
+                        const hitDelay = positionHitDelayMs.get(posKey) ?? 0;
+                        const previousDelay = removalDelayByTileId.get(tile.id);
+                        if (previousDelay === undefined || hitDelay < previousDelay) {
+                            removalDelayByTileId.set(tile.id, hitDelay);
+                        }
                     } else if (tile && isWoodenTile(tile.type)) {
                         // Wooden tiles in explosion area should be damaged, not destroyed
                         const woodKey = `${row},${col}`;
@@ -765,6 +853,9 @@ export function useGameState({
 
                 // Damage wooden tiles and track destroyed ones
                 const damagedWoodenTiles: Tile[] = [];
+                const woodenTilesForFragments = Array.from(
+                    woodenTilesToDamage.values(),
+                );
                 woodenTilesToDamage.forEach((woodTile) => {
                     if (woodTile.type === WOOD_NORMAL) {
                         // Normal -> Broken (don't remove, just update type)
@@ -781,31 +872,118 @@ export function useGameState({
                 });
 
                 updateGoalProgress([...destroyedTiles, ...damagedWoodenTiles]);
+                enqueueBombSpawnPreview(bombCreations, positionHitDelayMs);
 
                 // Animate removal and damage wooden tiles
                 setTiles((prev) =>
                     prev.map((t) => {
+                        const tilePosKey = `${t.row},${t.col}`;
+                        const bombCreation = bombCreationByPosKey.get(tilePosKey);
+                        if (bombCreation) {
+                            return {
+                                ...t,
+                                isRemoving: false,
+                                removalDelayMs: undefined,
+                                isMergingToBomb: false,
+                                mergeTargetRow: undefined,
+                                mergeTargetCol: undefined,
+                                isBombSpawning: true,
+                                bombSpawnDelayMs:
+                                    positionHitDelayMs.get(tilePosKey) ?? 0,
+                            };
+                        }
                         if (tilesToRemove.has(t.id)) {
-                            return { ...t, isRemoving: true };
+                            const mergeTarget = mergeTargetBySourcePosKey.get(
+                                tilePosKey,
+                            );
+                            return {
+                                ...t,
+                                isRemoving: true,
+                                removalDelayMs: removalDelayByTileId.get(t.id) ?? 0,
+                                isMergingToBomb: !!mergeTarget,
+                                mergeTargetRow: mergeTarget?.row,
+                                mergeTargetCol: mergeTarget?.col,
+                                isBombSpawning: false,
+                                bombSpawnDelayMs: undefined,
+                            };
                         }
                         // Damage wooden tiles: Normal -> Broken
                         const woodTile = Array.from(
                             woodenTilesToDamage.values(),
                         ).find((wt) => wt.id === t.id);
                         if (woodTile && woodTile.type === WOOD_NORMAL) {
-                            return { ...t, type: WOOD_BROKEN };
+                            return {
+                                ...t,
+                                type: WOOD_BROKEN,
+                                removalDelayMs: undefined,
+                                isMergingToBomb: false,
+                                mergeTargetRow: undefined,
+                                mergeTargetCol: undefined,
+                                isBombSpawning: false,
+                                bombSpawnDelayMs: undefined,
+                            };
                         }
-                        return t;
+                        return {
+                            ...t,
+                            removalDelayMs: undefined,
+                            isMergingToBomb: false,
+                            mergeTargetRow: undefined,
+                            mergeTargetCol: undefined,
+                            isBombSpawning: false,
+                            bombSpawnDelayMs: undefined,
+                        };
                     }),
                 );
 
+                const tilesForFragmentEffects = [
+                    ...destroyedTiles
+                        .filter(
+                            (tile) =>
+                                !mergeSourcePosKeys.has(`${tile.row},${tile.col}`),
+                        )
+                        .map((tile) => ({
+                            ...tile,
+                            removalDelayMs: removalDelayByTileId.get(tile.id) ?? 0,
+                        })),
+                    ...woodenTilesForFragments.map((tile) => ({
+                        ...tile,
+                        removalDelayMs:
+                            positionHitDelayMs.get(`${tile.row},${tile.col}`) ?? 0,
+                    })),
+                ];
                 await new Promise((resolve) =>
-                    setTimeout(resolve, ANIMATION.REMOVAL_DURATION),
+                    setTimeout(resolve, ANIMATION.TILE_BREAK_FRAGMENT_SPAWN_DELAY),
+                );
+                enqueueTileBreakFragments(tilesForFragmentEffects);
+                const maxRemovalDelayMs =
+                    removalDelayByTileId.size > 0
+                        ? Math.max(...removalDelayByTileId.values())
+                        : 0;
+                await new Promise((resolve) =>
+                    setTimeout(
+                        resolve,
+                        Math.max(
+                            0,
+                            ANIMATION.REMOVAL_DURATION -
+                                ANIMATION.TILE_BREAK_FRAGMENT_SPAWN_DELAY +
+                                maxRemovalDelayMs,
+                        ),
+                    ),
                 );
 
                 // Remove matched tiles and create new ones
                 setTiles((prev) => {
-                    let newTiles = prev.filter((t) => !tilesToRemove.has(t.id));
+                    let newTiles: Tile[] = prev
+                        .filter((t) => !tilesToRemove.has(t.id))
+                        .map((t): Tile => ({
+                            ...t,
+                            isMergingToBomb: undefined,
+                            mergeTargetRow: undefined,
+                            mergeTargetCol: undefined,
+                            isBombSpawning: undefined,
+                            bombSpawnDelayMs: undefined,
+                            removalDelayMs: undefined,
+                        }));
 
                     // Create bombs at their positions
                     bombCreations.forEach(({ position, bombType }) => {
@@ -814,7 +992,11 @@ export function useGameState({
                                 t.row === position.row &&
                                 t.col === position.col,
                         );
-                        if (!existingTile) {
+                        if (existingTile) {
+                            existingTile.type = bombType;
+                            existingTile.isBombSpawning = undefined;
+                            existingTile.bombSpawnDelayMs = undefined;
+                        } else {
                             const bombTile = createTile(
                                 bombType,
                                 position.row,
@@ -837,7 +1019,9 @@ export function useGameState({
 
                         // Find which rows will be filled (from top)
                         const occupiedRows = new Set(
-                            afterGravity.filter((t) => t.col === col).map((t) => t.row),
+                            afterGravity
+                                .filter((t) => t.col === col)
+                                .map((t) => t.row),
                         );
                         const emptyRows: number[] = [];
                         for (let r = 0; r < rows; r++) {
@@ -849,11 +1033,20 @@ export function useGameState({
                         for (let i = 0; i < tilesNeeded; i++) {
                             const startRow = -(tilesNeeded - i);
                             const finalRow = emptyRows[i];
-                            
+
                             // Get a smart tile type that respects accidentalMatchesChance
-                            const tileType = getSmartTileType(afterGravity, finalRow, col);
-                            
-                            const newTile = createTile(tileType, startRow, col, true);
+                            const tileType = getSmartTileType(
+                                afterGravity,
+                                finalRow,
+                                col,
+                            );
+
+                            const newTile = createTile(
+                                tileType,
+                                startRow,
+                                col,
+                                true,
+                            );
                             newTiles.push(newTile);
                             // Update afterGravity simulation for next tile
                             afterGravity.push({ ...newTile, row: finalRow });
@@ -895,7 +1088,14 @@ export function useGameState({
                 checkAndReshuffleIfNeeded();
             }, 100);
         },
-        [rows, cols, availableTileTypes, findMatches, updateGoalProgress, checkAndReshuffleIfNeeded],
+        [
+            rows,
+            cols,
+            availableTileTypes,
+            findMatches,
+            updateGoalProgress,
+            checkAndReshuffleIfNeeded,
+        ],
     );
 
     // Handle tile click
@@ -908,7 +1108,11 @@ export function useGameState({
             const clickedPos = { row, col };
 
             // Wooden and stone tiles cannot be selected or swapped
-            if (clickedTile && (isWoodenTile(clickedTile.type) || isStoneTile(clickedTile.type))) {
+            if (
+                clickedTile &&
+                (isWoodenTile(clickedTile.type) ||
+                    isStoneTile(clickedTile.type))
+            ) {
                 setSelectedTile(null);
                 return;
             }
@@ -974,6 +1178,324 @@ export function useGameState({
         ],
     );
 
+    const enqueueSwapTrailEffect = useCallback(
+        (from: Position, to: Position) => {
+            const durationMs = ANIMATION.SWAP_TRAIL_DURATION;
+            const fadeInMs = ANIMATION.SWAP_TRAIL_FADE_IN;
+            const maxOpacity = Math.min(
+                1,
+                Math.max(0, EFFECT_SPRITE_REGIONS.swapTrail.maxOpacity ?? 1),
+            );
+            const effectId = `effect-${effectIdCounterRef.current++}`;
+
+            const orientation = from.row === to.row ? "horizontal" : "vertical";
+
+            setActiveEffects((prev) => [
+                ...prev,
+                {
+                    id: effectId,
+                    type: "swapTrail",
+                    from,
+                    to,
+                    orientation,
+                    createdAt: Date.now(),
+                    durationMs,
+                    fadeInMs,
+                    fadeOutMs: Math.max(0, durationMs - fadeInMs),
+                    maxOpacity,
+                },
+            ]);
+
+            const timeoutId = setTimeout(() => {
+                setActiveEffects((prev) =>
+                    prev.filter((effect) => effect.id !== effectId),
+                );
+                effectTimeoutsRef.current = effectTimeoutsRef.current.filter(
+                    (id) => id !== timeoutId,
+                );
+            }, durationMs);
+
+            effectTimeoutsRef.current.push(timeoutId);
+        },
+        [],
+    );
+
+    const enqueueTileBreakFragments = useCallback((destroyedTiles: Tile[]) => {
+        const immediateEffects: BoardEffectInstance[] = [];
+        const uniqueTiles = Array.from(
+            new Map(destroyedTiles.map((tile) => [tile.id, tile])).values(),
+        );
+
+        uniqueTiles.forEach((tile) => {
+            const fragments = TILE_BREAK_FRAGMENT_SPRITES[tile.type];
+            if (!fragments || fragments.length === 0) return;
+
+            const flashId = `effect-${effectIdCounterRef.current++}`;
+
+            const tileEffects: BoardEffectInstance[] = [];
+
+            tileEffects.push({
+                id: flashId,
+                type: "tileBreakFlash",
+                row: tile.row,
+                col: tile.col,
+                rotationDeg: Math.random() * 360,
+                fadeInMs: TILE_BREAK_FLASH_CONFIG.fadeInMs,
+                fadeOutMs: TILE_BREAK_FLASH_CONFIG.fadeOutMs,
+                maxOpacity: TILE_BREAK_FLASH_CONFIG.maxOpacity,
+            });
+
+            const minFragments = TILE_BREAK_FRAGMENT_CONFIG.minFragments;
+            const maxFragments = TILE_BREAK_FRAGMENT_CONFIG.maxFragments;
+            const count =
+                minFragments +
+                Math.floor(Math.random() * (maxFragments - minFragments + 1));
+
+            for (let i = 0; i < count; i++) {
+                const fragment =
+                    fragments[Math.floor(Math.random() * fragments.length)];
+                const effectId = `effect-${effectIdCounterRef.current++}`;
+                const launchAngleDeg = Math.random() * 360 - 180;
+                const initialSpeedScale =
+                    TILE_BREAK_FRAGMENT_CONFIG.minInitialSpeedScale +
+                    Math.random() *
+                        (TILE_BREAK_FRAGMENT_CONFIG.maxInitialSpeedScale -
+                            TILE_BREAK_FRAGMENT_CONFIG.minInitialSpeedScale);
+                const spinDegPerSec =
+                    TILE_BREAK_FRAGMENT_CONFIG.minSpinDegPerSec +
+                    Math.random() *
+                        (TILE_BREAK_FRAGMENT_CONFIG.maxSpinDegPerSec -
+                            TILE_BREAK_FRAGMENT_CONFIG.minSpinDegPerSec);
+
+                tileEffects.push({
+                    id: effectId,
+                    type: "tileBreakFragment",
+                    row: tile.row,
+                    col: tile.col,
+                    fragment,
+                    launchAngleDeg,
+                    initialSpeedScale,
+                    spinDegPerSec,
+                    createdAt: Date.now(),
+                    maxOpacity: TILE_BREAK_FRAGMENT_CONFIG.maxOpacity,
+                });
+            }
+
+            const delayMs = Math.max(0, tile.removalDelayMs ?? 0);
+            if (delayMs > 0) {
+                const timeoutId = setTimeout(() => {
+                    setActiveEffects((prev) => [...prev, ...tileEffects]);
+                    effectTimeoutsRef.current = effectTimeoutsRef.current.filter(
+                        (id) => id !== timeoutId,
+                    );
+                }, delayMs);
+                effectTimeoutsRef.current.push(timeoutId);
+            } else {
+                immediateEffects.push(...tileEffects);
+            }
+        });
+
+        if (immediateEffects.length === 0) return;
+
+        setActiveEffects((prev) => [...prev, ...immediateEffects]);
+
+    }, []);
+
+    function enqueueBombSpawnPreview(
+        bombCreations: BombCreation[],
+        positionHitDelayMs: Map<string, number>,
+    ) {
+        if (bombCreations.length === 0) return;
+
+        const effects: BombSpawnPreviewEffectInstance[] = bombCreations.map(
+            ({ position, bombType }) => {
+                const delayMs =
+                    positionHitDelayMs.get(`${position.row},${position.col}`) ?? 0;
+                return {
+                    id: `effect-${effectIdCounterRef.current++}`,
+                    type: "bombSpawnPreview",
+                    row: position.row,
+                    col: position.col,
+                    bombType,
+                    delayMs,
+                };
+            },
+        );
+
+        setActiveEffects((prev) => [...prev, ...effects]);
+        effects.forEach((effect) => {
+            const timeoutId = setTimeout(() => {
+                setActiveEffects((prev) =>
+                    prev.filter((item) => item.id !== effect.id),
+                );
+                effectTimeoutsRef.current = effectTimeoutsRef.current.filter(
+                    (id) => id !== timeoutId,
+                );
+            }, effect.delayMs + BOMB_MERGE_EFFECT_CONFIG.durationMs + 16);
+            effectTimeoutsRef.current.push(timeoutId);
+        });
+    }
+
+    const enqueueAreaBombExplosion = useCallback((bomb: Tile) => {
+        const effectId = `effect-${effectIdCounterRef.current++}`;
+        const frameCount = AREA_BOMB_EXPLOSION_CONFIG.frameCount;
+        const frameDurationMs = AREA_BOMB_EXPLOSION_CONFIG.frameDurationMs;
+        const durationMs = frameCount * frameDurationMs;
+
+        setActiveEffects((prev) => [
+            ...prev,
+            {
+                id: effectId,
+                type: "areaBombExplosion",
+                row: bomb.row,
+                col: bomb.col,
+                createdAt: Date.now(),
+                frameCount,
+                frameDurationMs,
+                maxOpacity: AREA_BOMB_EXPLOSION_CONFIG.maxOpacity,
+            },
+        ]);
+
+        const timeoutId = setTimeout(() => {
+            setActiveEffects((prev) =>
+                prev.filter((effect) => effect.id !== effectId),
+            );
+            effectTimeoutsRef.current = effectTimeoutsRef.current.filter(
+                (id) => id !== timeoutId,
+            );
+        }, durationMs);
+
+        effectTimeoutsRef.current.push(timeoutId);
+    }, []);
+
+    const enqueueDirectionalBombBurst = useCallback((bomb: Tile) => {
+        if (bomb.type !== BOMB_HORIZONTAL && bomb.type !== BOMB_VERTICAL) {
+            return;
+        }
+
+        const axis = bomb.type === BOMB_HORIZONTAL ? "horizontal" : "vertical";
+        const speedScale = DIRECTIONAL_BOMB_BURST_CONFIG.speedScale;
+
+        const effects: BoardEffectInstance[] = [-1, 1].map((directionSign) => ({
+            id: `effect-${effectIdCounterRef.current++}`,
+            type: "directionalBombPart",
+            row: bomb.row,
+            col: bomb.col,
+            axis,
+            directionSign: directionSign as -1 | 1,
+            speedScale,
+            maxOpacity: DIRECTIONAL_BOMB_BURST_CONFIG.maxOpacity,
+        }));
+
+        setActiveEffects((prev) => [...prev, ...effects]);
+    }, []);
+
+    const getBombHitDelayMs = useCallback(
+        (bomb: Tile, position: Position): number => {
+            if (bomb.type === BOMB_HORIZONTAL) {
+                return (
+                    Math.abs(position.col - bomb.col) *
+                    ANIMATION.DIRECTIONAL_BOMB_TILE_HIT_STEP_MS
+                );
+            }
+            if (bomb.type === BOMB_VERTICAL) {
+                return (
+                    Math.abs(position.row - bomb.row) *
+                    ANIMATION.DIRECTIONAL_BOMB_TILE_HIT_STEP_MS
+                );
+            }
+            return 0;
+        },
+        [],
+    );
+
+    const collectBombPropagation = useCallback(
+        (
+            initialBombs: Array<{ bomb: Tile; delayMs: number }>,
+            currentTiles: Tile[],
+        ) => {
+            const positionHitDelayMs = new Map<string, number>();
+            const bombHitDelayById = new Map<string, number>();
+            const bombExplosionEvents: Array<{ bomb: Tile; delayMs: number }> = [];
+            const queue = [...initialBombs];
+
+            while (queue.length > 0) {
+                let minIdx = 0;
+                for (let i = 1; i < queue.length; i++) {
+                    if (queue[i].delayMs < queue[minIdx].delayMs) {
+                        minIdx = i;
+                    }
+                }
+                const [{ bomb, delayMs }] = queue.splice(minIdx, 1);
+
+                const knownDelay = bombHitDelayById.get(bomb.id);
+                if (knownDelay !== undefined && knownDelay <= delayMs) continue;
+                bombHitDelayById.set(bomb.id, delayMs);
+                bombExplosionEvents.push({ bomb, delayMs });
+
+                const explosionPositions = getBombExplosionPositions(bomb, rows, cols);
+                explosionPositions.forEach((pos) => {
+                    const posKey = `${pos.row},${pos.col}`;
+                    const hitDelay = delayMs + getBombHitDelayMs(bomb, pos);
+                    const previousPosDelay = positionHitDelayMs.get(posKey);
+                    if (
+                        previousPosDelay === undefined ||
+                        hitDelay < previousPosDelay
+                    ) {
+                        positionHitDelayMs.set(posKey, hitDelay);
+                    }
+
+                    const tileAtPos = getTileAt(currentTiles, pos.row, pos.col);
+                    if (tileAtPos && isBomb(tileAtPos.type)) {
+                        const knownBombDelay = bombHitDelayById.get(tileAtPos.id);
+                        if (
+                            knownBombDelay === undefined ||
+                            hitDelay < knownBombDelay
+                        ) {
+                            queue.push({ bomb: tileAtPos, delayMs: hitDelay });
+                        }
+                    }
+                });
+            }
+
+            return { positionHitDelayMs, bombExplosionEvents };
+        },
+        [cols, getBombHitDelayMs, rows],
+    );
+
+    const scheduleBombVisualEffects = useCallback(
+        (events: Array<{ bomb: Tile; delayMs: number }>) => {
+            events.forEach(({ bomb, delayMs }) => {
+                const trigger = () => {
+                    enqueueDirectionalBombBurst(bomb);
+                    if (bomb.type === BOMB_AREA) {
+                        enqueueAreaBombExplosion(bomb);
+                    }
+                };
+
+                if (delayMs <= 0) {
+                    trigger();
+                    return;
+                }
+
+                const timeoutId = setTimeout(() => {
+                    trigger();
+                    effectTimeoutsRef.current = effectTimeoutsRef.current.filter(
+                        (id) => id !== timeoutId,
+                    );
+                }, delayMs);
+                effectTimeoutsRef.current.push(timeoutId);
+            });
+        },
+        [enqueueAreaBombExplosion, enqueueDirectionalBombBurst],
+    );
+
+    const removeEffect = useCallback((effectId: string) => {
+        setActiveEffects((prev) =>
+            prev.filter((effect) => effect.id !== effectId),
+        );
+    }, []);
+
     // Handle swap between two tiles
     const handleSwap = useCallback(
         async (from: Position, to: Position) => {
@@ -986,7 +1508,12 @@ export function useGameState({
             if (!tile1 || !tile2) return;
 
             // Cannot swap wooden or stone tiles
-            if (isWoodenTile(tile1.type) || isWoodenTile(tile2.type) || isStoneTile(tile1.type) || isStoneTile(tile2.type)) {
+            if (
+                isWoodenTile(tile1.type) ||
+                isWoodenTile(tile2.type) ||
+                isStoneTile(tile1.type) ||
+                isStoneTile(tile2.type)
+            ) {
                 return;
             }
 
@@ -998,6 +1525,8 @@ export function useGameState({
             if (!hasBomb && !isValidSwap(currentTiles, from, to)) {
                 // Animate invalid swap
                 setIsAnimating(true);
+                enqueueSwapTrailEffect(from, to);
+                setSwappingTileIds([tile1.id, tile2.id]);
 
                 setTiles((prev) =>
                     prev.map((t) => {
@@ -1026,6 +1555,7 @@ export function useGameState({
                 await new Promise((resolve) =>
                     setTimeout(resolve, ANIMATION.INVALID_SWAP_DURATION),
                 );
+                setSwappingTileIds([]);
                 setIsAnimating(false);
                 return;
             }
@@ -1034,6 +1564,8 @@ export function useGameState({
             setMovesUsed((prev) => prev + 1);
 
             setIsAnimating(true);
+            enqueueSwapTrailEffect(from, to);
+            setSwappingTileIds([tile1.id, tile2.id]);
 
             // Perform the swap animation
             setTiles((prev) =>
@@ -1049,6 +1581,7 @@ export function useGameState({
             await new Promise((resolve) =>
                 setTimeout(resolve, ANIMATION.SWAP_SETTLE),
             );
+            setSwappingTileIds([]);
 
             // If a bomb was swapped, trigger its explosion
             if (hasBomb) {
@@ -1084,37 +1617,10 @@ export function useGameState({
                         },
                     );
 
-                    const matchedPositions = new Set<string>();
-                    const processedBombs = new Set<string>();
-                    const bombQueue = [bomb];
-
-                    while (bombQueue.length > 0) {
-                        const b = bombQueue.shift()!;
-                        if (processedBombs.has(b.id)) continue;
-                        processedBombs.add(b.id);
-
-                        const explosionPositions = getBombExplosionPositions(
-                            b,
-                            rows,
-                            cols,
-                        );
-                        explosionPositions.forEach((pos) => {
-                            matchedPositions.add(`${pos.row},${pos.col}`);
-
-                            const tileAtPos = getTileAt(
-                                currentTiles,
-                                pos.row,
-                                pos.col,
-                            );
-                            if (
-                                tileAtPos &&
-                                isBomb(tileAtPos.type) &&
-                                !processedBombs.has(tileAtPos.id)
-                            ) {
-                                bombQueue.push(tileAtPos);
-                            }
-                        });
-                    }
+                    const { positionHitDelayMs, bombExplosionEvents } =
+                        collectBombPropagation([{ bomb, delayMs: 0 }], currentTiles);
+                    scheduleBombVisualEffects(bombExplosionEvents);
+                    const matchedPositions = new Set(positionHitDelayMs.keys());
 
                     const roundScore = matchedPositions.size * POINTS_PER_TILE;
                     setScore((prev) => prev + roundScore);
@@ -1125,13 +1631,26 @@ export function useGameState({
                     // Wooden tiles should not be destroyed directly - they take damage instead
                     // Stone tiles are indestructible and should be completely skipped
                     const tilesToRemove = new Set<string>();
+                    const removalDelayByTileId = new Map<string, number>();
                     const destroyedTiles: Tile[] = [];
                     matchedPositions.forEach((posKey) => {
                         const [row, col] = posKey.split(",").map(Number);
                         const tile = getTileAt(currentTiles, row, col);
-                        if (tile && !isWoodenTile(tile.type) && !isStoneTile(tile.type)) {
+                        if (
+                            tile &&
+                            !isWoodenTile(tile.type) &&
+                            !isStoneTile(tile.type)
+                        ) {
                             tilesToRemove.add(tile.id);
                             destroyedTiles.push(tile);
+                            const hitDelay = positionHitDelayMs.get(posKey) ?? 0;
+                            const previousDelay = removalDelayByTileId.get(tile.id);
+                            if (
+                                previousDelay === undefined ||
+                                hitDelay < previousDelay
+                            ) {
+                                removalDelayByTileId.set(tile.id, hitDelay);
+                            }
                         } else if (tile && isWoodenTile(tile.type)) {
                             // Wooden tiles in explosion area should be damaged, not destroyed
                             const woodKey = `${row},${col}`;
@@ -1144,6 +1663,9 @@ export function useGameState({
 
                     // Damage wooden tiles and track destroyed ones
                     const damagedWoodenTiles: Tile[] = [];
+                    const woodenTilesForFragments = Array.from(
+                        woodenTilesToDamage.values(),
+                    );
                     woodenTilesToDamage.forEach((woodTile) => {
                         if (woodTile.type === WOOD_NORMAL) {
                             // Normal -> Broken (don't remove, just update type)
@@ -1166,21 +1688,56 @@ export function useGameState({
                     setTiles((prev) =>
                         prev.map((t) => {
                             if (tilesToRemove.has(t.id)) {
-                                return { ...t, isRemoving: true };
+                                return {
+                                    ...t,
+                                    isRemoving: true,
+                                    removalDelayMs: removalDelayByTileId.get(t.id) ?? 0,
+                                };
                             }
                             // Damage wooden tiles: Normal -> Broken
                             const woodTile = Array.from(
                                 woodenTilesToDamage.values(),
                             ).find((wt) => wt.id === t.id);
                             if (woodTile && woodTile.type === WOOD_NORMAL) {
-                                return { ...t, type: WOOD_BROKEN };
+                                return {
+                                    ...t,
+                                    type: WOOD_BROKEN,
+                                    removalDelayMs: undefined,
+                                };
                             }
-                            return t;
+                            return { ...t, removalDelayMs: undefined };
                         }),
                     );
 
+                    const tilesForFragmentEffects = [
+                        ...destroyedTiles.map((tile) => ({
+                            ...tile,
+                            removalDelayMs: removalDelayByTileId.get(tile.id) ?? 0,
+                        })),
+                        ...woodenTilesForFragments.map((tile) => ({
+                            ...tile,
+                            removalDelayMs:
+                                positionHitDelayMs.get(`${tile.row},${tile.col}`) ?? 0,
+                        })),
+                    ];
                     await new Promise((resolve) =>
-                        setTimeout(resolve, ANIMATION.REMOVAL_DURATION),
+                        setTimeout(resolve, ANIMATION.TILE_BREAK_FRAGMENT_SPAWN_DELAY),
+                    );
+                    enqueueTileBreakFragments(tilesForFragmentEffects);
+                    const maxRemovalDelayMs =
+                        removalDelayByTileId.size > 0
+                            ? Math.max(...removalDelayByTileId.values())
+                            : 0;
+                    await new Promise((resolve) =>
+                        setTimeout(
+                            resolve,
+                            Math.max(
+                                0,
+                                ANIMATION.REMOVAL_DURATION -
+                                    ANIMATION.TILE_BREAK_FRAGMENT_SPAWN_DELAY +
+                                    maxRemovalDelayMs,
+                            ),
+                        ),
                     );
 
                     setTiles((prev) => {
@@ -1199,7 +1756,9 @@ export function useGameState({
 
                             // Find which rows will be filled (from top)
                             const occupiedRows = new Set(
-                                afterGravity.filter((t) => t.col === c).map((t) => t.row),
+                                afterGravity
+                                    .filter((t) => t.col === c)
+                                    .map((t) => t.row),
                             );
                             const emptyRows: number[] = [];
                             for (let r = 0; r < rows; r++) {
@@ -1211,14 +1770,26 @@ export function useGameState({
                             for (let i = 0; i < tilesNeeded; i++) {
                                 const startRow = -(tilesNeeded - i);
                                 const finalRow = emptyRows[i];
-                                
+
                                 // Get a smart tile type that respects accidentalMatchesChance
-                                const tileType = getSmartTileType(afterGravity, finalRow, c);
-                                
-                                const newTile = createTile(tileType, startRow, c, true);
+                                const tileType = getSmartTileType(
+                                    afterGravity,
+                                    finalRow,
+                                    c,
+                                );
+
+                                const newTile = createTile(
+                                    tileType,
+                                    startRow,
+                                    c,
+                                    true,
+                                );
                                 newTiles.push(newTile);
                                 // Update afterGravity simulation for next tile
-                                afterGravity.push({ ...newTile, row: finalRow });
+                                afterGravity.push({
+                                    ...newTile,
+                                    row: finalRow,
+                                });
                             }
                         }
 
@@ -1261,6 +1832,7 @@ export function useGameState({
             updateGoalProgress,
             checkAndReshuffleIfNeeded,
             onMoveComplete,
+            enqueueSwapTrailEffect,
         ],
     );
 
@@ -1292,6 +1864,9 @@ export function useGameState({
         isComplete,
         isFailed,
         isReshuffling,
+        swappingTileIds,
+        activeEffects,
+        removeEffect,
         handleTileClick,
         handleSwap,
         setSelectedTile,

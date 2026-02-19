@@ -1,4 +1,4 @@
-import type { Tile, Position } from "./types";
+import type { Tile, Position, EffectOrientation } from "./types";
 import {
     BOMB_VERTICAL,
     BOMB_HORIZONTAL,
@@ -11,6 +11,11 @@ import {
     WOOD_SPRITE_POSITIONS,
     STONE_TILE,
     STONE_SPRITE_POSITIONS,
+    EFFECT_SPRITE_SHEETS,
+    EFFECT_SPRITE_REGIONS,
+    type PackedSpriteRegion,
+    GRID_PADDING,
+    GRID_GAP,
 } from "./constants";
 
 // Counter for generating unique tile IDs
@@ -267,6 +272,80 @@ export function getTileSpriteStyle(tileType: number): React.CSSProperties {
         backgroundImage: "url('/tiles.png')",
         backgroundSize: `${cols * 100 * sizeScale}% ${rows * 100 * sizeScale}%`,
         backgroundPosition: `${xPercent}% ${yPercent}%`,
+    };
+}
+
+/**
+ * Get CSS style for a packed visual-effect sprite.
+ */
+export function getPackedSpriteStyle(
+    region: PackedSpriteRegion,
+    renderWidth: number,
+    renderHeight: number
+): React.CSSProperties {
+    const sheet = EFFECT_SPRITE_SHEETS[region.sheet];
+    const scaleX = renderWidth / region.width;
+    const scaleY = renderHeight / region.height;
+
+    return {
+        backgroundImage: `url('${sheet.imagePath}')`,
+        backgroundPosition: `-${region.x * scaleX}px -${region.y * scaleY}px`,
+        backgroundSize: `${sheet.width * scaleX}px ${sheet.height * scaleY}px`,
+        backgroundRepeat: "no-repeat",
+    };
+}
+
+export function getEffectSpriteStyle(
+    effectType: keyof typeof EFFECT_SPRITE_REGIONS,
+    renderWidth: number,
+    renderHeight: number
+): React.CSSProperties {
+    return getPackedSpriteStyle(
+        EFFECT_SPRITE_REGIONS[effectType],
+        renderWidth,
+        renderHeight,
+    );
+}
+
+export type SwapTrailPlacement = {
+    left: number;
+    top: number;
+    width: number;
+    height: number;
+    orientation: EffectOrientation;
+};
+
+/**
+ * Compute stationary placement for the swap trail centered between two tiles.
+ */
+export function getSwapTrailPlacement(
+    from: Position,
+    to: Position,
+    cellSize: number
+): SwapTrailPlacement {
+    const fromCenterX = GRID_PADDING + from.col * (cellSize + GRID_GAP) + cellSize / 2;
+    const fromCenterY = GRID_PADDING + from.row * (cellSize + GRID_GAP) + cellSize / 2;
+    const toCenterX = GRID_PADDING + to.col * (cellSize + GRID_GAP) + cellSize / 2;
+    const toCenterY = GRID_PADDING + to.row * (cellSize + GRID_GAP) + cellSize / 2;
+
+    const centerX = (fromCenterX + toCenterX) / 2;
+    const centerY = (fromCenterY + toCenterY) / 2;
+    const orientation: EffectOrientation =
+        from.row === to.row ? "horizontal" : "vertical";
+
+    const region = EFFECT_SPRITE_REGIONS.swapTrail;
+    const scale = region.scale ?? 1;
+    const spriteAspectRatio = region.width / region.height;
+    const majorAxisLength = cellSize * 2 + GRID_GAP;
+    const width = majorAxisLength * scale;
+    const height = width / spriteAspectRatio;
+
+    return {
+        left: centerX - width / 2,
+        top: centerY - height / 2,
+        width,
+        height,
+        orientation,
     };
 }
 

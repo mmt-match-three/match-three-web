@@ -1,9 +1,35 @@
 "use client";
 
 import * as React from "react";
-import type { Level, PointerState, Position, LevelGoal } from "@/lib/types";
-import { GRID_GAP, GRID_PADDING } from "@/lib/constants";
-import { areAdjacent } from "@/lib/game-utils";
+import { createPortal } from "react-dom";
+import type {
+    AreaBombExplosionEffectInstance,
+    BombSpawnPreviewEffectInstance,
+    DirectionalBombPartEffectInstance,
+    Level,
+    PointerState,
+    Position,
+    LevelGoal,
+    TileBreakFlashEffectInstance,
+    TileBreakFragmentEffectInstance,
+} from "@/lib/types";
+import {
+    AREA_BOMB_EXPLOSION_CONFIG,
+    BOMB_MERGE_EFFECT_CONFIG,
+    DIRECTIONAL_BOMB_BURST_CONFIG,
+    EFFECT_SPRITE_REGIONS,
+    GRID_GAP,
+    GRID_PADDING,
+    TILE_BREAK_FLASH_CONFIG,
+    TILE_BREAK_FRAGMENT_CONFIG,
+} from "@/lib/constants";
+import {
+    areAdjacent,
+    getEffectSpriteStyle,
+    getPackedSpriteStyle,
+    getSwapTrailPlacement,
+    getTileSpriteStyle,
+} from "@/lib/game-utils";
 import { useGameState } from "@/hooks/use-game-state";
 import { TileCell } from "./tile-cell";
 
@@ -15,6 +41,489 @@ type GameBoardProps = {
     onMovesUpdate: (movesUsed: number) => void;
     onGoalsUpdate?: (goals: LevelGoal[]) => void;
 };
+
+type TileBreakFragmentParticleProps = {
+    effect: TileBreakFragmentEffectInstance;
+    cellSize: number;
+    rows: number;
+    onExit: (id: string) => void;
+};
+
+type TileBreakFlashProps = {
+    effect: TileBreakFlashEffectInstance;
+    cellSize: number;
+    onExit: (id: string) => void;
+};
+
+type AreaBombExplosionProps = {
+    effect: AreaBombExplosionEffectInstance;
+    cellSize: number;
+};
+
+type DirectionalBombPartProps = {
+    effect: DirectionalBombPartEffectInstance;
+    cellSize: number;
+    boardRect: DOMRect | null;
+    onExit: (id: string) => void;
+};
+
+type BombSpawnPreviewProps = {
+    effect: BombSpawnPreviewEffectInstance;
+    cellSize: number;
+};
+
+function AreaBombExplosion({ effect, cellSize }: AreaBombExplosionProps) {
+    const [frame, setFrame] = React.useState(0);
+    const explosionSize = cellSize * AREA_BOMB_EXPLOSION_CONFIG.sizeScale;
+    const tileCenterX =
+        GRID_PADDING + effect.col * (cellSize + GRID_GAP) + cellSize / 2;
+    const tileCenterY =
+        GRID_PADDING + effect.row * (cellSize + GRID_GAP) + cellSize / 2;
+    const left = tileCenterX - explosionSize / 2;
+    const top = tileCenterY - explosionSize / 2;
+
+    React.useEffect(() => {
+        let frameIndex = 0;
+        const intervalId = window.setInterval(() => {
+            frameIndex += 1;
+            if (frameIndex >= effect.frameCount) {
+                window.clearInterval(intervalId);
+                return;
+            }
+            setFrame(frameIndex);
+        }, effect.frameDurationMs);
+
+        return () => {
+            window.clearInterval(intervalId);
+        };
+    }, [effect.frameCount, effect.frameDurationMs]);
+
+    const scaleX = explosionSize / AREA_BOMB_EXPLOSION_CONFIG.frameWidth;
+    const scaleY = explosionSize / AREA_BOMB_EXPLOSION_CONFIG.frameHeight;
+    const frameOffsetX = frame * AREA_BOMB_EXPLOSION_CONFIG.frameWidth * scaleX;
+
+    return (
+        <div
+            className="absolute will-change-transform"
+            style={{
+                left: `${left}px`,
+                top: `${top}px`,
+                width: `${explosionSize}px`,
+                height: `${explosionSize}px`,
+                opacity: effect.maxOpacity,
+                backgroundImage: "url('/tiles-explotion.png')",
+                backgroundRepeat: "no-repeat",
+                backgroundSize: `${2560 * scaleX}px ${256 * scaleY}px`,
+                backgroundPosition: `-${frameOffsetX}px 0px`,
+            }}
+        />
+    );
+}
+
+function BombSpawnPreview({ effect, cellSize }: BombSpawnPreviewProps) {
+    const left = GRID_PADDING + effect.col * (cellSize + GRID_GAP);
+    const top = GRID_PADDING + effect.row * (cellSize + GRID_GAP);
+
+    return (
+        <div
+            className="absolute rounded-lg"
+            style={{
+                left: `${left}px`,
+                top: `${top}px`,
+                width: `${cellSize}px`,
+                height: `${cellSize}px`,
+                ...getTileSpriteStyle(effect.bombType),
+                opacity: BOMB_MERGE_EFFECT_CONFIG.bombStartOpacity,
+                transform: `rotate(${BOMB_MERGE_EFFECT_CONFIG.bombStartRotationDeg}deg) scale(${BOMB_MERGE_EFFECT_CONFIG.bombStartScale})`,
+                animation: `bombSpawnPreview ${BOMB_MERGE_EFFECT_CONFIG.durationMs}ms ${BOMB_MERGE_EFFECT_CONFIG.easing} ${effect.delayMs}ms forwards`,
+                zIndex: 12,
+            }}
+        />
+    );
+}
+
+function DirectionalBombPart({
+    effect,
+    cellSize,
+    boardRect,
+    onExit,
+}: DirectionalBombPartProps) {
+    const partRef = React.useRef<HTMLDivElement>(null);
+    const trailRef = React.useRef<HTMLDivElement>(null);
+    const isDoneRef = React.useRef(false);
+    const isHorizontal = effect.axis === "horizontal";
+    const halfTrailWidth = EFFECT_SPRITE_REGIONS.directionalBombTrail.width / 2;
+    const halfTrailHeight =
+        EFFECT_SPRITE_REGIONS.directionalBombTrail.height / 2;
+    const useFirstHalf = effect.directionSign === 1; // swapped mapping between flying parts
+    const partRegion = EFFECT_SPRITE_REGIONS.directionalBombPart;
+    const basePartSize = cellSize * DIRECTIONAL_BOMB_BURST_CONFIG.sizeScale;
+    const partAspectRatio = partRegion.width / partRegion.height;
+    const height = basePartSize;
+    const width = height * partAspectRatio;
+    if (!boardRect || typeof document === "undefined") return null;
+    const tileCenterX =
+        boardRect.left +
+        GRID_PADDING +
+        effect.col * (cellSize + GRID_GAP) +
+        cellSize / 2;
+    const tileCenterY =
+        boardRect.top +
+        GRID_PADDING +
+        effect.row * (cellSize + GRID_GAP) +
+        cellSize / 2;
+    const left = tileCenterX - width / 2;
+    const top = tileCenterY - height / 2;
+    const clipTop = Math.max(0, boardRect.top);
+    const clipRight = Math.max(0, window.innerWidth - boardRect.right);
+    const clipBottom = Math.max(0, window.innerHeight - boardRect.bottom);
+    const clipLeft = Math.max(0, boardRect.left);
+    const boardClipPath = `inset(${clipTop}px ${clipRight}px ${clipBottom}px ${clipLeft}px)`;
+    const trailThickness =
+        height * DIRECTIONAL_BOMB_BURST_CONFIG.trailThicknessScale;
+    const trailMaxLength =
+        cellSize * DIRECTIONAL_BOMB_BURST_CONFIG.trailMaxLengthScale;
+    const halfTrailRegion = isHorizontal
+        ? ({
+              sheet: EFFECT_SPRITE_REGIONS.directionalBombTrail.sheet,
+              x:
+                  EFFECT_SPRITE_REGIONS.directionalBombTrail.x +
+                  (useFirstHalf ? 0 : halfTrailWidth),
+              y: EFFECT_SPRITE_REGIONS.directionalBombTrail.y,
+              width: halfTrailWidth,
+              height: EFFECT_SPRITE_REGIONS.directionalBombTrail.height,
+          } as const)
+        : ({
+              sheet: EFFECT_SPRITE_REGIONS.directionalBombTrail.sheet,
+              x: EFFECT_SPRITE_REGIONS.directionalBombTrail.x,
+              y:
+                  EFFECT_SPRITE_REGIONS.directionalBombTrail.y +
+                  (useFirstHalf ? 0 : halfTrailHeight),
+              width: EFFECT_SPRITE_REGIONS.directionalBombTrail.width,
+              height: halfTrailHeight,
+          } as const);
+    const rotationDeg =
+        effect.axis === "horizontal"
+            ? effect.directionSign === -1
+                ? 0
+                : 180
+            : effect.directionSign === -1
+              ? 90
+              : -90;
+
+    React.useEffect(() => {
+        const element = partRef.current;
+        const trailElement = trailRef.current;
+        if (!element || !trailElement) return;
+        isDoneRef.current = false;
+
+        const speedPxPerSec = effect.speedScale * cellSize;
+        const velocityX =
+            effect.axis === "horizontal"
+                ? effect.directionSign * speedPxPerSec
+                : 0;
+        const velocityY =
+            effect.axis === "vertical"
+                ? effect.directionSign * speedPxPerSec
+                : 0;
+        const startTime = performance.now();
+        const margin = Math.max(width, height) + 20;
+        const trailGrowDurationSec =
+            DIRECTIONAL_BOMB_BURST_CONFIG.trailGrowDurationMs / 1000;
+
+        const step = (now: number) => {
+            if (isDoneRef.current) return;
+            const elapsedSec = (now - startTime) / 1000;
+            const translateX = velocityX * elapsedSec;
+            const translateY = velocityY * elapsedSec;
+            element.style.transform = `translate(${translateX}px, ${translateY}px)`;
+
+            const travelDistance = isHorizontal
+                ? Math.abs(translateX)
+                : Math.abs(translateY);
+            const growCap =
+                trailMaxLength *
+                Math.min(
+                    1,
+                    elapsedSec / Math.max(trailGrowDurationSec, 0.0001),
+                );
+            const visibleLength = Math.max(
+                0,
+                Math.min(trailMaxLength, Math.min(travelDistance, growCap)),
+            );
+            const featherPx = Math.min(
+                Math.max(2, trailThickness * 0.5),
+                Math.max(2, visibleLength * 0.35),
+            );
+
+            if (isHorizontal) {
+                trailElement.style.left =
+                    effect.directionSign === 1
+                        ? `${width / 2 - trailMaxLength}px`
+                        : `${width / 2}px`;
+                trailElement.style.top = `${(height - trailThickness) / 2}px`;
+                trailElement.style.width = `${trailMaxLength}px`;
+                trailElement.style.height = `${trailThickness}px`;
+                const mask =
+                    effect.directionSign === 1
+                        ? `linear-gradient(90deg, transparent 0px, transparent ${Math.max(0, trailMaxLength - visibleLength - featherPx)}px, black ${Math.max(0, trailMaxLength - visibleLength + featherPx)}px, black ${trailMaxLength}px)`
+                        : `linear-gradient(90deg, black 0px, black ${Math.max(0, visibleLength - featherPx)}px, transparent ${Math.min(trailMaxLength, visibleLength + featherPx)}px, transparent ${trailMaxLength}px)`;
+                trailElement.style.clipPath = "none";
+                trailElement.style.maskImage = mask;
+                trailElement.style.webkitMaskImage = mask;
+            } else {
+                trailElement.style.left = `${(width - trailThickness) / 2}px`;
+                trailElement.style.top =
+                    effect.directionSign === 1
+                        ? `${height / 2 - trailMaxLength}px`
+                        : `${height / 2}px`;
+                trailElement.style.width = `${trailThickness}px`;
+                trailElement.style.height = `${trailMaxLength}px`;
+                const mask =
+                    effect.directionSign === 1
+                        ? `linear-gradient(180deg, transparent 0px, transparent ${Math.max(0, trailMaxLength - visibleLength - featherPx)}px, black ${Math.max(0, trailMaxLength - visibleLength + featherPx)}px, black ${trailMaxLength}px)`
+                        : `linear-gradient(180deg, black 0px, black ${Math.max(0, visibleLength - featherPx)}px, transparent ${Math.min(trailMaxLength, visibleLength + featherPx)}px, transparent ${trailMaxLength}px)`;
+                trailElement.style.clipPath = "none";
+                trailElement.style.maskImage = mask;
+                trailElement.style.webkitMaskImage = mask;
+            }
+
+            const currentLeft = left + translateX;
+            const currentTop = top + translateY;
+            const isOffscreen =
+                currentLeft + width < -margin ||
+                currentLeft > window.innerWidth + margin ||
+                currentTop + height < -margin ||
+                currentTop > window.innerHeight + margin;
+
+            if (isOffscreen) {
+                isDoneRef.current = true;
+                onExit(effect.id);
+                return;
+            }
+
+            requestAnimationFrame(step);
+        };
+
+        const raf = requestAnimationFrame(step);
+        return () => {
+            isDoneRef.current = true;
+            cancelAnimationFrame(raf);
+        };
+    }, [
+        cellSize,
+        effect.axis,
+        effect.directionSign,
+        effect.id,
+        effect.speedScale,
+        height,
+        left,
+        onExit,
+        top,
+        width,
+        isHorizontal,
+    ]);
+
+    return createPortal(
+        <div
+            className="fixed"
+            style={{
+                left: "0px",
+                top: "0px",
+                width: "100vw",
+                height: "100vh",
+                pointerEvents: "none",
+                zIndex: 68,
+                clipPath: boardClipPath,
+                WebkitClipPath: boardClipPath,
+                overflow: "hidden",
+            }}
+        >
+            <div
+                ref={partRef}
+                className="absolute"
+                style={{
+                    left: `${left}px`,
+                    top: `${top}px`,
+                    width: `${width}px`,
+                    height: `${height}px`,
+                }}
+            >
+                <div
+                    ref={trailRef}
+                    className="will-change-transform"
+                    style={{
+                        position: "absolute",
+                        left: "0px",
+                        top: "0px",
+                        width: `${trailMaxLength}px`,
+                        height: `${trailThickness}px`,
+                        opacity: DIRECTIONAL_BOMB_BURST_CONFIG.trailOpacity,
+                        ...getPackedSpriteStyle(
+                            halfTrailRegion,
+                            isHorizontal ? trailMaxLength : trailThickness,
+                            isHorizontal ? trailThickness : trailMaxLength,
+                        ),
+                    }}
+                />
+                <div
+                    className="will-change-transform"
+                    style={{
+                        width: `${width}px`,
+                        height: `${height}px`,
+                        opacity: effect.maxOpacity,
+                        ...getPackedSpriteStyle(partRegion, width, height),
+                        transform: `rotate(${rotationDeg}deg)`,
+                        transformOrigin: "center",
+                    }}
+                />
+            </div>
+        </div>,
+        document.body,
+    );
+}
+
+function TileBreakFlash({ effect, cellSize, onExit }: TileBreakFlashProps) {
+    const flashSize = cellSize;
+    const totalDurationMs = effect.fadeInMs + effect.fadeOutMs;
+    const tileCenterX =
+        GRID_PADDING + effect.col * (cellSize + GRID_GAP) + cellSize / 2;
+    const tileCenterY =
+        GRID_PADDING + effect.row * (cellSize + GRID_GAP) + cellSize / 2;
+    const left = tileCenterX - flashSize / 2;
+    const top = tileCenterY - flashSize / 2;
+
+    React.useEffect(() => {
+        const timeoutId = window.setTimeout(() => {
+            onExit(effect.id);
+        }, totalDurationMs);
+        return () => window.clearTimeout(timeoutId);
+    }, [effect.id, onExit, totalDurationMs]);
+
+    const flashStyle: React.CSSProperties & {
+        "--flash-max-opacity": number;
+    } = {
+        width: `${flashSize}px`,
+        height: `${flashSize}px`,
+        ...getEffectSpriteStyle("tileBreakFlash", flashSize, flashSize),
+        animation: `tileBreakFlashScale ${totalDurationMs}ms linear forwards, tileBreakFlashFadeIn ${effect.fadeInMs}ms ease-out forwards, tileBreakFlashFadeOut ${effect.fadeOutMs}ms ease-in ${effect.fadeInMs}ms forwards`,
+        opacity: 0,
+        "--flash-max-opacity": effect.maxOpacity,
+    };
+
+    return (
+        <div
+            className="absolute"
+            style={{
+                left: `${left}px`,
+                top: `${top}px`,
+                width: `${flashSize}px`,
+                height: `${flashSize}px`,
+                transform: `rotate(${effect.rotationDeg}deg)`,
+                transformOrigin: "center",
+            }}
+        >
+            <div className="will-change-transform" style={flashStyle} />
+        </div>
+    );
+}
+
+function TileBreakFragmentParticle({
+    effect,
+    cellSize,
+    rows,
+    onExit,
+}: TileBreakFragmentParticleProps) {
+    const particleRef = React.useRef<HTMLDivElement>(null);
+    const isDoneRef = React.useRef(false);
+
+    const fragmentWidth =
+        effect.fragment.width * TILE_BREAK_FRAGMENT_CONFIG.fragmentScale;
+    const fragmentHeight =
+        effect.fragment.height * TILE_BREAK_FRAGMENT_CONFIG.fragmentScale;
+    const tileCenterX =
+        GRID_PADDING + effect.col * (cellSize + GRID_GAP) + cellSize / 2;
+    const tileCenterY =
+        GRID_PADDING + effect.row * (cellSize + GRID_GAP) + cellSize / 2;
+    const left = tileCenterX - fragmentWidth / 2;
+    const top = tileCenterY - fragmentHeight / 2;
+    const boardHeight =
+        GRID_PADDING * 2 + rows * cellSize + (rows - 1) * GRID_GAP;
+
+    React.useEffect(() => {
+        const element = particleRef.current;
+        if (!element) return;
+        isDoneRef.current = false;
+
+        const angleRadians = (effect.launchAngleDeg * Math.PI) / 180;
+        const speedPxPerSec = effect.initialSpeedScale * cellSize;
+        const velocityX = Math.cos(angleRadians) * speedPxPerSec;
+        const velocityY = -Math.sin(angleRadians) * speedPxPerSec;
+        const gravityPxPerSec2 =
+            TILE_BREAK_FRAGMENT_CONFIG.gravityScale * cellSize;
+        const spinDegPerSec = effect.spinDegPerSec;
+        const startTime = performance.now();
+
+        const step = (now: number) => {
+            if (isDoneRef.current) return;
+
+            const elapsedSec = (now - startTime) / 1000;
+            const translateX = velocityX * elapsedSec;
+            const translateY =
+                velocityY * elapsedSec +
+                0.5 * gravityPxPerSec2 * elapsedSec * elapsedSec;
+            const rotationDeg = spinDegPerSec * elapsedSec;
+
+            element.style.transform = `translate(${translateX}px, ${translateY}px) rotate(${rotationDeg}deg)`;
+
+            if (
+                top + translateY >
+                boardHeight + fragmentHeight + cellSize * 0.5
+            ) {
+                isDoneRef.current = true;
+                onExit(effect.id);
+                return;
+            }
+
+            requestAnimationFrame(step);
+        };
+
+        const raf = requestAnimationFrame(step);
+        return () => {
+            isDoneRef.current = true;
+            cancelAnimationFrame(raf);
+        };
+    }, [
+        boardHeight,
+        cellSize,
+        effect.id,
+        effect.initialSpeedScale,
+        effect.launchAngleDeg,
+        effect.spinDegPerSec,
+        fragmentHeight,
+        onExit,
+        top,
+    ]);
+
+    return (
+        <div
+            ref={particleRef}
+            className="absolute will-change-transform"
+            style={{
+                left: `${left}px`,
+                top: `${top}px`,
+                width: `${fragmentWidth}px`,
+                height: `${fragmentHeight}px`,
+                opacity: effect.maxOpacity,
+                ...getPackedSpriteStyle(
+                    effect.fragment,
+                    fragmentWidth,
+                    fragmentHeight,
+                ),
+            }}
+        />
+    );
+}
 
 export function GameBoard({
     level,
@@ -50,11 +559,14 @@ export function GameBoard({
         isComplete,
         isFailed,
         isReshuffling,
+        swappingTileIds,
+        activeEffects,
         movesUsed,
         goalProgress,
         goals,
         handleTileClick,
         handleSwap,
+        removeEffect,
         setSelectedTile,
     } = useGameState({
         rows: level.dimensions.rows,
@@ -263,6 +775,7 @@ export function GameBoard({
     );
 
     const isReady = tiles.length > 0 && cellSize !== null;
+    const boardRect = containerRef.current?.getBoundingClientRect() ?? null;
 
     // Calculate aspect ratio based on level dimensions
     const aspectRatio = level.dimensions.cols / level.dimensions.rows;
@@ -313,6 +826,7 @@ export function GameBoard({
                                 cellSize={cellSize}
                                 isSelected={isSelected}
                                 isAnimating={isAnimating}
+                                isSwapping={swappingTileIds.includes(tile.id)}
                                 onClick={() => handleClick(tile.row, tile.col)}
                                 onMouseEnter={() =>
                                     handleMouseEnter(tile.row, tile.col)
@@ -329,6 +843,148 @@ export function GameBoard({
                 </div>
             )}
 
+            {isReady && (
+                <div className="absolute inset-0 pointer-events-none z-30 overflow-hidden rounded-lg">
+                    {activeEffects.map((effect) => {
+                        if (effect.type !== "bombSpawnPreview") {
+                            return null;
+                        }
+                        return (
+                            <BombSpawnPreview
+                                key={effect.id}
+                                effect={effect}
+                                cellSize={cellSize}
+                            />
+                        );
+                    })}
+                </div>
+            )}
+
+            {/* Unclipped visual effects layer (swap trail, etc.) */}
+            {isReady && (
+                <div className="absolute inset-0 pointer-events-none z-70 overflow-visible">
+                    {activeEffects.map((effect) => {
+                        if (effect.type !== "swapTrail") return null;
+
+                        const placement = getSwapTrailPlacement(
+                            effect.from,
+                            effect.to,
+                            cellSize,
+                        );
+                        const fadeOutDelayMs = Math.max(
+                            0,
+                            effect.durationMs - effect.fadeOutMs,
+                        );
+                        const effectStyle: React.CSSProperties & {
+                            "--effect-max-opacity": number;
+                        } = {
+                            left: `${placement.left}px`,
+                            top: `${placement.top}px`,
+                            width: `${placement.width}px`,
+                            height: `${placement.height}px`,
+                            transform:
+                                effect.orientation === "vertical"
+                                    ? "rotate(90deg)"
+                                    : "none",
+                            transformOrigin: "center",
+                            ...getEffectSpriteStyle(
+                                effect.type,
+                                placement.width,
+                                placement.height,
+                            ),
+                            animation: `swapTrailFadeIn ${effect.fadeInMs}ms ease-out forwards, swapTrailFadeOut ${effect.fadeOutMs}ms ease-in ${fadeOutDelayMs}ms forwards`,
+                            opacity: 0,
+                            "--effect-max-opacity": effect.maxOpacity,
+                        };
+
+                        return (
+                            <div
+                                key={effect.id}
+                                className="absolute"
+                                style={effectStyle}
+                            />
+                        );
+                    })}
+                </div>
+            )}
+
+            {/* Clipped fragments layer (must stay inside game field) */}
+            {isReady && (
+                <div className="absolute inset-0 pointer-events-none z-68 overflow-hidden rounded-lg">
+                    {activeEffects.map((effect) => {
+                        if (effect.type !== "areaBombExplosion") {
+                            return null;
+                        }
+                        return (
+                            <AreaBombExplosion
+                                key={effect.id}
+                                effect={effect}
+                                cellSize={cellSize}
+                            />
+                        );
+                    })}
+                </div>
+            )}
+
+            {isReady && (
+                <div className="absolute inset-0 pointer-events-none z-68 overflow-hidden rounded-lg">
+                    {activeEffects.map((effect) => {
+                        if (effect.type !== "directionalBombPart") {
+                            return null;
+                        }
+                        return (
+                            <DirectionalBombPart
+                                key={effect.id}
+                                effect={effect}
+                                cellSize={cellSize}
+                                boardRect={boardRect}
+                                onExit={removeEffect}
+                            />
+                        );
+                    })}
+                </div>
+            )}
+
+            {/* Clipped fragments layer (must stay inside game field) */}
+            {isReady && (
+                <div className="absolute inset-0 pointer-events-none z-69 overflow-visible">
+                    {activeEffects.map((effect) => {
+                        if (effect.type !== "tileBreakFlash") {
+                            return null;
+                        }
+
+                        return (
+                            <TileBreakFlash
+                                key={effect.id}
+                                effect={effect}
+                                cellSize={cellSize}
+                                onExit={removeEffect}
+                            />
+                        );
+                    })}
+                </div>
+            )}
+
+            {/* Clipped fragments layer (must stay inside game field) */}
+            {isReady && (
+                <div className="absolute inset-0 pointer-events-none z-70 overflow-hidden rounded-lg">
+                    {activeEffects.map((effect) => {
+                        if (effect.type !== "tileBreakFragment") {
+                            return null;
+                        }
+                        return (
+                            <TileBreakFragmentParticle
+                                key={effect.id}
+                                effect={effect}
+                                cellSize={cellSize}
+                                rows={level.dimensions.rows}
+                                onExit={removeEffect}
+                            />
+                        );
+                    })}
+                </div>
+            )}
+
             {/* Reshuffle overlay */}
             {isReshuffling && (
                 <div className="absolute inset-0 flex items-center justify-center bg-black/40 backdrop-blur-sm z-50 animate-in fade-in duration-300">
@@ -339,6 +995,64 @@ export function GameBoard({
                     </div>
                 </div>
             )}
+
+            <style jsx>{`
+                @keyframes swapTrailFadeIn {
+                    from {
+                        opacity: 0;
+                    }
+                    to {
+                        opacity: var(--effect-max-opacity, 1);
+                    }
+                }
+
+                @keyframes swapTrailFadeOut {
+                    from {
+                        opacity: var(--effect-max-opacity, 1);
+                    }
+                    to {
+                        opacity: 0;
+                    }
+                }
+
+                @keyframes tileBreakFlashScale {
+                    0% {
+                        transform: scale(${TILE_BREAK_FLASH_CONFIG.startScale});
+                    }
+                    100% {
+                        transform: scale(${TILE_BREAK_FLASH_CONFIG.endScale});
+                    }
+                }
+
+                @keyframes tileBreakFlashFadeIn {
+                    from {
+                        opacity: 0;
+                    }
+                    to {
+                        opacity: var(--flash-max-opacity, 0.6);
+                    }
+                }
+
+                @keyframes tileBreakFlashFadeOut {
+                    from {
+                        opacity: var(--flash-max-opacity, 0.6);
+                    }
+                    to {
+                        opacity: 0;
+                    }
+                }
+
+                @keyframes bombSpawnPreview {
+                    from {
+                        opacity: ${BOMB_MERGE_EFFECT_CONFIG.bombStartOpacity};
+                        transform: rotate(${BOMB_MERGE_EFFECT_CONFIG.bombStartRotationDeg}deg) scale(${BOMB_MERGE_EFFECT_CONFIG.bombStartScale});
+                    }
+                    to {
+                        opacity: ${BOMB_MERGE_EFFECT_CONFIG.bombEndOpacity};
+                        transform: rotate(${BOMB_MERGE_EFFECT_CONFIG.bombEndRotationDeg}deg) scale(${BOMB_MERGE_EFFECT_CONFIG.bombEndScale});
+                    }
+                }
+            `}</style>
         </div>
     );
 }
